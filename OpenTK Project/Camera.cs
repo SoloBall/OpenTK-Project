@@ -1,0 +1,39 @@
+﻿using OpenTK.Graphics.ES11;
+using OpenTK.Mathematics;
+
+namespace OpenTK_Project
+{
+    public class Camera
+    {
+        public Vector3 Front = -Vector3.UnitZ;
+        public Vector3 Up = Vector3.UnitY;
+        public Vector3 Right => Vector3.Normalize(Vector3.Cross(Front, Up));
+
+
+        public Vector3 Position = new(0, 0, 5);
+        public float Yaw = 0;
+        public float Pitch = 0;
+
+        public float speed = 5f;
+        public float sensitivity = 0.1f;
+
+        public void UpdateDirection()
+        {
+            float yawRads = MathHelper.DegreesToRadians(Yaw);
+            float pitchRads = MathHelper.DegreesToRadians(Pitch);
+
+            Vector3 direction = new(
+                MathF.Cos(yawRads) * MathF.Cos(pitchRads),
+                MathF.Sin(pitchRads),
+                MathF.Cos(pitchRads) * MathF.Sin(yawRads)
+                );
+
+            Front = direction.Normalized();
+        }
+
+        public Matrix4 GetMatrix()
+        {
+            return Matrix4.LookAt(Position, Position + Front, Up);
+        }
+    }
+}
