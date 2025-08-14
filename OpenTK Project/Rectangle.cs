@@ -14,7 +14,7 @@ namespace OpenTK_Project
             Length = length;
             Width = width;
             Height = height;
-            Position = position ?? new Vector3 (1, 1, 1);
+            Position = position ?? new Vector3 (0, 0, 0);
             Color = color ?? new Color4(1f, 1f, 1f, 1f);
         }
     }

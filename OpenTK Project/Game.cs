@@ -1,293 +1,349 @@
-﻿//using OpenTK;
-//using OpenTK.Graphics.OpenGL;
-//using OpenTK.Mathematics;
-//using OpenTK.Windowing.Common;
-//using OpenTK.Windowing.Desktop;
-//using OpenTK.Windowing.GraphicsLibraryFramework;
-//using System;
-//using System.Drawing;
-//using System.Runtime.CompilerServices;
+﻿using OpenTK;
+using OpenTK.Windowing.Common;
+using OpenTK.Windowing.Desktop;
+using OpenTK.Graphics.OpenGL;
+using OpenTK.Mathematics;
+using OpenTK.Windowing.GraphicsLibraryFramework;
+using System.Runtime.CompilerServices;
 
-//namespace OpenTK_Project
-//{
-//    public class Game : GameWindow 
-//    {
-//        private int VertexBufferHandle;
-//        private int ShaderProgramHandle;
-//        private int VertexArrayHandle;
-//        private int IndexBufferHandle;
+namespace OpenTK_Project
+{
+    public class Game : GameWindow
+    {
+        private int VertexBufferHandle;
+        private int ShaderProgramHandle;
+        private int VertexArrayHandle;
+        private int IndexBufferHandle;
 
-//        private Camera camera;
-//        private float deltaTime;
-//        private Vector2 lastMousePos;
-//        private bool isFirstMouse;
-//        private int indicesCount;
+        private Camera? camera;
+        private float deltaTime;
+        private Vector2 lastMousePos;
+        private bool isFirstMouse;
+        private int indicesCount;
 
-//        private List<Rectangle> rectangles = new();
-//        public Game(int width = 1280, int height = 768, string title = "Base Window") : base(GameWindowSettings.Default, 
-//            new NativeWindowSettings()
-//            {
-//                Title = title,
-//                ClientSize = new(width, height),
-//                StartVisible = false,
-//                StartFocused = true,
-//                API = ContextAPI.OpenGL,
-//                Profile = ContextProfile.Core,
-//                APIVersion = new(3, 3)
-//            })
-//        {
-//            this.CenterWindow();
-//        }
-//        protected override void OnLoad()
-//        {
-//            IsVisible = true;
-//            isFirstMouse = true;
-//            GL.ClearColor(new Color4(0.3f, 0.3f, 0.3f, 1f));
-//            CreateRectangleMesh(new Color4(1f, 1f, 1f, 1f)); 
+        private Random? rand;
 
-//            ShaderProgramHandle = GL.CreateProgram();
+        private List<Rectangle>? rectangles;
+        public Game(int width = 1280, int height = 768, string title = "Base Window") : base(GameWindowSettings.Default,
+            new NativeWindowSettings()
+            {
+                Title = title,
+                ClientSize = new(width, height),
+                StartVisible = false,
+                StartFocused = true,
+                API = ContextAPI.OpenGL,
+                Profile = ContextProfile.Core,
+                APIVersion = new(3, 3)
+            })
+        {
+            this.CenterWindow();
+        }
+        protected override void OnLoad()
+        {
+            rand = new Random();
+            IsVisible = true;
+            isFirstMouse = true;
+            GL.ClearColor(new Color4(0.3f, 0.3f, 0.3f, 1f));
 
-//            camera = new();
-//            CursorState = CursorState.Grabbed;
+            rectangles = new();
 
-//            base.OnLoad();
-//        }
-//        protected override void OnUpdateFrame(FrameEventArgs args)
-//        {
-//            base.OnUpdateFrame(args);
+            camera = new();
+            CursorState = CursorState.Grabbed;
 
-//            deltaTime = (float)args.Time;
-//            float velocity = camera.speed * deltaTime;
+            GL.Enable(EnableCap.DepthTest);
 
-//            var keyboardInput = KeyboardState;
-//            var mouseInput = MouseState;
-            
-//            if (keyboardInput.IsKeyDown(Keys.W))
-//            {
-//                camera.Position += camera.Front * velocity;
-//            }
-//            if (keyboardInput.IsKeyDown(Keys.A))
-//            {
-//                camera.Position -= camera.Right * velocity;
-//            }
-//            if (keyboardInput.IsKeyDown(Keys.S))
-//            {
-//                camera.Position -= camera.Front * velocity;
-//            }
-//            if (keyboardInput.IsKeyDown(Keys.D))
-//            {
-//                camera.Position += camera.Right * velocity;
-//            }
-//            if (keyboardInput.IsKeyDown(Keys.Escape))
-//            {
-//                CursorState = CursorState.Normal;
-//            }
+            Rectangle plane = new(50, 50, 1);
+            rectangles.Add(plane);
+            updateRectangles();
+            base.OnLoad();
+        }
+        protected override void OnUpdateFrame(FrameEventArgs args)
+        {
+            base.OnUpdateFrame(args);
 
-//            if (MouseState.IsButtonPressed(MouseButton.Left))
-//            {
-//                Rectangle rectangle = new Rectangle(
-//                    1, 1, 1,
-//                    camera.Position
-//                    );
-//                rectangles.Add(rectangle);
-//            }
-//        }
-//        protected override void OnRenderFrame(FrameEventArgs args)
-//        {
-//            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            updateRectangles();
+            deltaTime = (float)args.Time;
+            float velocity = camera!.speed * deltaTime;
 
-//            GL.UseProgram(ShaderProgramHandle);
-//            GL.BindVertexArray(VertexArrayHandle);
-//            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
+            var keyboardInput = KeyboardState;
+            var mouseInput = MouseState; 
 
-//            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), Size.X / Size.Y, 0.1f, 100f);
-//            Matrix4 view = camera.GetMatrix();
+            if (keyboardInput.IsKeyDown(Keys.W))
+            {
+                camera.Position += camera.Front * velocity;
+            }
+            if (keyboardInput.IsKeyDown(Keys.A))
+            {
+                camera.Position -= camera.Right * velocity;
+            }
+            if (keyboardInput.IsKeyDown(Keys.S))
+            {
+                camera.Position -= camera.Front * velocity;
+            }
+            if (keyboardInput.IsKeyDown(Keys.D))
+            {
+                camera.Position += camera.Right * velocity;
+            }
+            if (keyboardInput.IsKeyDown(Keys.Escape))
+            {
+                CursorState = CursorState.Normal;
+            }
 
-//            int projectionLocation = GL.GetUniformLocation(ShaderProgramHandle, "projection");
-//            int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
-//            int modelLocation = GL.GetUniformLocation(ShaderProgramHandle, "model");
+            if (MouseState.IsButtonPressed(MouseButton.Left))
+            {
+                int length = rand!.Next(1, 5);
+                int width = rand.Next(1, 5);
+                int height = rand.Next(1, 5);
+                Color4 randomColor = new((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
+                Rectangle rectangle = new(length, width, height, camera.Position, randomColor);
+                rectangles!.Add(rectangle);
+            }
+        }
+        protected override void OnRenderFrame(FrameEventArgs args)
+        {
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-//            GL.UniformMatrix4(projectionLocation, false, ref projection);
-//            GL.UniformMatrix4(viewLocation, false, ref view);
+            GL.UseProgram(ShaderProgramHandle);
+            GL.BindVertexArray(VertexArrayHandle);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
 
-//            foreach (Rectangle rectangle in rectangles)
-//            {
-//                Matrix4 model = Matrix4.CreateTranslation(rectangle.Position);
-//                GL.UniformMatrix4(modelLocation, false, ref model);
-//                GL.DrawElements(PrimitiveType.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0);
-//            }
+            Matrix4 view = camera!.GetMatrix();
+            int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
+            GL.UniformMatrix4(viewLocation, false, ref view);
 
-//            this.Context.SwapBuffers();
-//            base.OnRenderFrame(args);
-//        }
-//        protected override void OnMouseMove(MouseMoveEventArgs e)
-//        {
-//            base.OnMouseMove(e);
+            GL.DrawElements(PrimitiveType.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0);
 
-//            if (isFirstMouse)
-//            {
-//                lastMousePos = e.Position;
-//                isFirstMouse = false;
-//            }
+            this.Context.SwapBuffers();
+            base.OnRenderFrame(args);
+        }
+        protected override void OnMouseMove(MouseMoveEventArgs e)
+        {
+            base.OnMouseMove(e);
 
-//            Vector2 deltaMousePos = e.Position - lastMousePos;
-//            lastMousePos = e.Position;
+            if (isFirstMouse)
+            {
+                lastMousePos = e.Position;
+                isFirstMouse = false;
+            }
 
-//            camera.Pitch -= deltaMousePos.Y * camera.sensitivity;
-//            camera.Yaw += deltaMousePos.X * camera.sensitivity;
-//            camera.Pitch = Math.Clamp(camera.Pitch, -89f, 89f);
+            Vector2 deltaMousePos = e.Position - lastMousePos;
+            lastMousePos = e.Position;
 
-//            camera.UpdateDirection();
-//        }
-//        protected override void OnResize(ResizeEventArgs e)
-//        {
-//            GL.Viewport(0, 0, e.Width, e.Height);
-//            base.OnResize(e);
-//        }
+            camera!.Pitch -= deltaMousePos.Y * camera.sensitivity;
+            camera.Yaw += deltaMousePos.X * camera.sensitivity;
+            camera.Pitch = Math.Clamp(camera.Pitch, -89f, 89f);
 
-//        void CreateRectangleMesh(Color4 color)
-//        {
-//            VertexPositionColor[] vertices =
-//            {
-//                // Right face vertices
-//                new VertexPositionColor(new Vector3(1, 0, 0), color),
-//                new VertexPositionColor(new Vector3(1, 1, 0), color),
-//                new VertexPositionColor(new Vector3(1, 1, 1), color),
-//                new VertexPositionColor(new Vector3(1, 0, 1), color),
+            camera.UpdateDirection();
+        }
+        protected override void OnResize(ResizeEventArgs e)
+        {
+            GL.Viewport(0, 0, e.Width, e.Height);
+            base.OnResize(e);
+        }
 
-//                // Left face vertices
-//                new VertexPositionColor(new Vector3(0, 1, 0), color),
-//                new VertexPositionColor(new Vector3(0, 0, 0), color),
-//                new VertexPositionColor(new Vector3(0, 0, 1), color),
-//                new VertexPositionColor(new Vector3(0, 1, 1), color)
-//            };
+        void updateRectangles()
+        {
+            List<VertexPositionColor> vertices = new();
+            for (int i = 0; i < rectangles!.Count(); i++)                                               //hellish code :/
+            {
+                Rectangle rectangle = rectangles![i];
+                // face 1
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
+                    rectangle.Color));
 
-//            int[] indices = {
-//                0,1,2,  2,3,0,   // right face
-//                1,4,7,  7,2,1,   // top face
-//                4,5,6,  6,7,4,   // left face
-//                5,0,3,  3,6,5,   // bottom face
-//                1,0,5,  5,4,1,   // front face
-//                3,2,7,  3,7,6    // back face 
-//            };
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Position.Z),
+                    rectangle.Color));
 
-//            indicesCount = indices.Length;
-//            // using vertexbuffer to send data to GPU
-//            int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    rectangle.Color));
 
-//            VertexBufferHandle = GL.GenBuffer();
-//            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-//            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeInBytes, vertices, BufferUsageHint.DynamicDraw);
-//            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    rectangle.Color));
 
-//            IndexBufferHandle = GL.GenBuffer();
-//            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-//            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Length * sizeof(int), indices, BufferUsageHint.DynamicDraw);
-//            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+                // face 2
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Position.Z),
+                    rectangle.Color));
 
-//            VertexArrayHandle = GL.GenVertexArray();
-//            GL.BindVertexArray(VertexArrayHandle);
-//            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
+                    rectangle.Color));
 
-//            VertexAttribute VertexPositionColorAttrib0 = VertexPositionColor.VertexInfo.Attributes[0];
-//            VertexAttribute VertexPositionColorAttrib1 = VertexPositionColor.VertexInfo.Attributes[1];
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    rectangle.Color));
 
-//            GL.VertexAttribPointer(VertexPositionColorAttrib0.Index, VertexPositionColorAttrib0.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), VertexPositionColorAttrib0.Offset);
-//            GL.VertexAttribPointer(VertexPositionColorAttrib1.Index, VertexPositionColorAttrib1.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), VertexPositionColorAttrib1.Offset);
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    rectangle.Color));
+            };
 
-//            GL.EnableVertexAttribArray(VertexPositionColorAttrib0.Index);
-//            GL.EnableVertexAttribArray(VertexPositionColorAttrib1.Index);
+            int[] rectangleIndices = {
+                0,1,2,  2,3,0,
+                1,4,7,  7,2,1,
+                4,5,6,  6,7,4,
+                5,0,3,  3,6,5,
+                1,0,5,  5,4,1,
+                3,2,7,  3,7,6
+            };
 
+            List<int> indices = new();
+            for (int i = 0; i < vertices.Count(); i++)
+            {
+                foreach (int index in rectangleIndices)
+                {
+                    indices.Add(index + i * 8);
+                }
+            }
 
-//            GL.BindVertexArray(0);
-//            //defining the code for shaders -- what they do
-//            string vertexShaderSource =
-//            @"
-//            #version 330 core
+            indicesCount = indices.Count();
+            // using vertexbuffer to send data to GPU
+            int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
 
-//            layout (location = 0) in vec3 vPosition;
-//            layout (location = 1) in vec4 vColor;
+            VertexBufferHandle = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
+            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
-//            uniform mat4 projection;
-//            uniform mat4 view;
-//            uniform mat4 model;
+            IndexBufferHandle = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
-//            out vec4 fColor;
+            VertexArrayHandle = GL.GenVertexArray();
+            GL.BindVertexArray(VertexArrayHandle);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
 
-//            void main() {
-//                fColor = vColor;
-//                gl_Position = projection * view * model * vec4(vPosition, 1.0);
-//            }
-//            ";
+            VertexAttribute vertexPositionColorAttrib0 = VertexPositionColor.VertexInfo.Attributes[0];
+            VertexAttribute vertexPositionColorAttrib1 = VertexPositionColor.VertexInfo.Attributes[1];
 
-//            string fragmentShaderSource =
-//            @"
-//            #version 330 core
+            GL.VertexAttribPointer(vertexPositionColorAttrib0.Index, vertexPositionColorAttrib0.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib0.Offset);
+            GL.VertexAttribPointer(vertexPositionColorAttrib1.Index, vertexPositionColorAttrib1.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib1.Offset);
 
-//            in vec4 fColor;
-//            out vec4 Color;
-
-//            void main(){
-//                Color = fColor;
-//            }
-//            ";
-
-//            int vertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
-//            GL.ShaderSource(vertexShaderHandle, vertexShaderSource);
-//            GL.CompileShader(vertexShaderHandle);
-
-//            string vertexShaderInfo = GL.GetShaderInfoLog(vertexShaderHandle);
-//            if (vertexShaderInfo != string.Empty)
-//            {
-//                Console.WriteLine("Error during compilation of vertex shader: " + vertexShaderInfo);
-//            }
-
-//            int fragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
-//            GL.ShaderSource(fragmentShaderHandle, fragmentShaderSource);
-//            GL.CompileShader(fragmentShaderHandle);
-
-//            string fragmentShaderInfo = GL.GetShaderInfoLog(fragmentShaderHandle);
-//            if (fragmentShaderInfo != string.Empty)
-//            {
-//                Console.WriteLine("Error during compilation of fragment shader: " + fragmentShaderInfo);
-//            }
-
-//            GL.AttachShader(ShaderProgramHandle, vertexShaderHandle);
-//            GL.AttachShader(ShaderProgramHandle, fragmentShaderHandle);
-
-//            GL.LinkProgram(ShaderProgramHandle);
-
-//            GL.DetachShader(ShaderProgramHandle, vertexShaderHandle);
-//            GL.DetachShader(ShaderProgramHandle, fragmentShaderHandle);
-
-//            GL.DeleteShader(vertexShaderHandle);
-//            GL.DeleteShader(fragmentShaderHandle);
+            GL.EnableVertexAttribArray(vertexPositionColorAttrib0.Index);
+            GL.EnableVertexAttribArray(vertexPositionColorAttrib1.Index);
 
 
+            GL.BindVertexArray(0);
+            //defining the code for shaders -- what they do
+            string vertexShaderSource =
+            @"
+            #version 330 core
 
-//            GL.UseProgram(ShaderProgramHandle);
-//            int[] viewport = new int[4];
-//            GL.GetInteger(GetPName.Viewport, viewport);
-//            int viewportSizeLocation = GL.GetUniformLocation(ShaderProgramHandle, "viewportSize");
-//            GL.Uniform2(viewportSizeLocation, (float)viewport[2], (float)viewport[3]);
+            layout (location = 0) in vec3 vPosition;
+            layout (location = 1) in vec4 vColor;
 
-//            GL.UseProgram(0);
-//        }
-        
-//        protected override void OnUnload() // garbage collection
-//        {
-//            GL.BindVertexArray(0);
-//            GL.DeleteVertexArray(VertexArrayHandle);
+            uniform mat4 projection;
+            uniform mat4 view;
+            uniform mat4 model;
 
-//            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-//            GL.DeleteBuffer(VertexBufferHandle);
-//            GL.DeleteBuffer(IndexBufferHandle);
+            out vec4 fColor;
+            out vec3 fPos;
 
-//            GL.UseProgram(0);
+            void main() {
+                fColor = vColor;
+                gl_Position = projection * view * model * vec4(vPosition, 1.0);
+                fPos = vPosition;
+            }
+            ";
 
-//            GL.DeleteProgram(ShaderProgramHandle);
+            string fragmentShaderSource =
+            @"
+            #version 330 core
 
-//            base.OnUnload();
-//        }
-//    }
-//}
+            in vec4 fColor;
+            in vec3 fPos;
+            uniform vec3 cameraPos;
+            out vec4 color;
+
+            void main(){
+                float darkFactor = clamp(distance(fPos, cameraPos) / 5, 0.0, 1.0);
+                color = fColor * (1 - darkFactor);
+            }
+            ";
+
+            int vertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
+            GL.ShaderSource(vertexShaderHandle, vertexShaderSource);
+            GL.CompileShader(vertexShaderHandle);
+
+            string vertexShaderInfo = GL.GetShaderInfoLog(vertexShaderHandle);
+            if (vertexShaderInfo != string.Empty)
+            {
+                Console.WriteLine("Error during compilation of vertex shader: " + vertexShaderInfo);
+            }
+
+            int fragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
+            GL.ShaderSource(fragmentShaderHandle, fragmentShaderSource);
+            GL.CompileShader(fragmentShaderHandle);
+
+            string fragmentShaderInfo = GL.GetShaderInfoLog(fragmentShaderHandle);
+            if (fragmentShaderInfo != string.Empty)
+            {
+                Console.WriteLine("Error during compilation of fragment shader: " + fragmentShaderInfo);
+            }
+
+            ShaderProgramHandle = GL.CreateProgram();
+
+            GL.AttachShader(ShaderProgramHandle, vertexShaderHandle);
+            GL.AttachShader(ShaderProgramHandle, fragmentShaderHandle);
+
+            GL.LinkProgram(ShaderProgramHandle);
+
+            GL.DetachShader(ShaderProgramHandle, vertexShaderHandle);
+            GL.DetachShader(ShaderProgramHandle, fragmentShaderHandle);
+
+            GL.DeleteShader(vertexShaderHandle);
+            GL.DeleteShader(fragmentShaderHandle);
+
+
+
+            GL.UseProgram(ShaderProgramHandle);
+
+            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), Size.X / Size.Y, 0.1f, 100f);
+            Matrix4 view = camera!.GetMatrix();
+            Matrix4 model = Matrix4.Identity;
+
+            int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
+
+            int projectionLocation = GL.GetUniformLocation(ShaderProgramHandle, "projection");
+            int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
+            int modelLocation = GL.GetUniformLocation(ShaderProgramHandle, "model");
+
+            GL.UniformMatrix4(projectionLocation, false, ref projection);
+            GL.UniformMatrix4(viewLocation, false, ref view);
+            GL.UniformMatrix4(modelLocation, false, ref model);
+
+            GL.Uniform3(cameraPosLocation, camera.Position);
+
+            GL.UseProgram(0);
+        }
+
+        protected override void OnUnload() // garbage collection
+        {
+            GL.BindVertexArray(0);
+            GL.DeleteVertexArray(VertexArrayHandle);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+            GL.DeleteBuffer(VertexBufferHandle);
+            GL.DeleteBuffer(IndexBufferHandle);
+
+            GL.UseProgram(0);
+
+            GL.DeleteProgram(ShaderProgramHandle);
+
+            base.OnUnload();
+        }
+    }
+}
