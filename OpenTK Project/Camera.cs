@@ -10,7 +10,7 @@ namespace OpenTK_Project
         public Vector3 Right => Vector3.Normalize(Vector3.Cross(Front, Up));
 
 
-        public Vector3 Position = new(0, 0, 5);
+        public Vector3 Position = new(50000, 10000, 10000);
         public float Yaw = 0;
         public float Pitch = 0;
 

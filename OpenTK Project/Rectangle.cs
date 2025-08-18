@@ -17,5 +17,21 @@ namespace OpenTK_Project
             Position = position ?? new Vector3 (0, 0, 0);
             Color = color ?? new Color4(1f, 1f, 1f, 1f);
         }
+        public bool CollidesWithSphere(Vector3 sphereCenter, float radius)
+        {
+            Vector3 min = Position;
+            Vector3 max = Position + new Vector3(Length, Width, Height);
+
+            float x = Math.Clamp(sphereCenter.X, min.X, max.X);
+            float y = Math.Clamp(sphereCenter.Y, min.Y, max.Y);
+            float z = Math.Clamp(sphereCenter.Z, min.Z, max.Z);
+
+            float distanceSquared =
+                MathF.Pow((x - sphereCenter.X), 2) +
+                MathF.Pow((y - sphereCenter.Y), 2) +
+                MathF.Pow((z - sphereCenter.Z), 2);
+
+            return distanceSquared < MathF.Pow(radius, 2);
+        }
     }
 }

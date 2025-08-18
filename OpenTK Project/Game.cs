@@ -5,6 +5,7 @@ using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 
 namespace OpenTK_Project
 {
@@ -53,8 +54,12 @@ namespace OpenTK_Project
             GL.Enable(EnableCap.DepthTest);
 
             Rectangle plane = new(50, 50, 1);
-            rectangles.Add(plane);
+            for (int i = 0; i < 200; i++)
+            {
+                rectangles.Add(plane);
+            }
             updateRectangles();
+
             base.OnLoad();
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
@@ -66,24 +71,29 @@ namespace OpenTK_Project
             float velocity = camera!.speed * deltaTime;
 
             var keyboardInput = KeyboardState;
-            var mouseInput = MouseState; 
-
+            var mouseInput = MouseState;
+            Vector3 proposedPosition = camera.Position;
             if (keyboardInput.IsKeyDown(Keys.W))
             {
-                camera.Position += camera.Front * velocity;
+                proposedPosition += camera.Front * velocity;
             }
             if (keyboardInput.IsKeyDown(Keys.A))
             {
-                camera.Position -= camera.Right * velocity;
+                proposedPosition -= camera.Right * velocity;
             }
             if (keyboardInput.IsKeyDown(Keys.S))
             {
-                camera.Position -= camera.Front * velocity;
+                proposedPosition -= camera.Front * velocity;
             }
             if (keyboardInput.IsKeyDown(Keys.D))
             {
-                camera.Position += camera.Right * velocity;
+                proposedPosition += camera.Right * velocity;
             }
+            if (proposedPosition != camera.Position)
+            {
+                CameraCollidesWithRectangle(proposedPosition, velocity);
+            }
+
             if (keyboardInput.IsKeyDown(Keys.Escape))
             {
                 CursorState = CursorState.Normal;
@@ -95,10 +105,11 @@ namespace OpenTK_Project
                 int width = rand.Next(1, 5);
                 int height = rand.Next(1, 5);
                 Color4 randomColor = new((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
-                Rectangle rectangle = new(length, width, height, camera.Position, randomColor);
+                Rectangle rectangle = new(length, width, height, camera.Position + camera.Front * 3, randomColor);
                 rectangles!.Add(rectangle);
             }
         }
+        
         protected override void OnRenderFrame(FrameEventArgs args)
         {
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -212,6 +223,16 @@ namespace OpenTK_Project
             // using vertexbuffer to send data to GPU
             int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
 
+            if (VertexBufferHandle != 0)
+            {
+                GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+                GL.BindVertexArray(0);
+                GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+                GL.DeleteBuffer(VertexBufferHandle);
+                GL.DeleteBuffer(IndexBufferHandle);
+                GL.DeleteVertexArray(VertexArrayHandle);
+                VertexBufferHandle = IndexBufferHandle = VertexArrayHandle = 0;
+            }
             VertexBufferHandle = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
             GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
@@ -220,7 +241,7 @@ namespace OpenTK_Project
             IndexBufferHandle = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
             GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 
             VertexArrayHandle = GL.GenVertexArray();
             GL.BindVertexArray(VertexArrayHandle);
@@ -245,7 +266,7 @@ namespace OpenTK_Project
             layout (location = 0) in vec3 vPosition;
             layout (location = 1) in vec4 vColor;
 
-            uniform mat4 projection;
+            uniform mat4 projection; 
             uniform mat4 view;
             uniform mat4 model;
 
@@ -269,7 +290,8 @@ namespace OpenTK_Project
             out vec4 color;
 
             void main(){
-                float darkFactor = clamp(distance(fPos, cameraPos) / 5, 0.0, 1.0);
+                float lightRadius = 5;
+                float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
                 color = fColor * (1 - darkFactor);
             }
             ";
@@ -294,6 +316,10 @@ namespace OpenTK_Project
                 Console.WriteLine("Error during compilation of fragment shader: " + fragmentShaderInfo);
             }
 
+            if (ShaderProgramHandle != 0)
+            {
+                GL.DeleteProgram(ShaderProgramHandle);
+            }
             ShaderProgramHandle = GL.CreateProgram();
 
             GL.AttachShader(ShaderProgramHandle, vertexShaderHandle);
@@ -326,8 +352,58 @@ namespace OpenTK_Project
             GL.UniformMatrix4(modelLocation, false, ref model);
 
             GL.Uniform3(cameraPosLocation, camera.Position);
-
             GL.UseProgram(0);
+        }
+        public void CameraCollidesWithRectangle(Vector3 proposedPosition, float velocity)
+        {
+            float radius = 1f;
+            foreach (Rectangle rectangle in rectangles!) 
+            {
+                if (rectangle.CollidesWithSphere(proposedPosition, radius)) //WIP
+                {
+                    Vector3 min = rectangle.Position;
+                    Vector3 max = rectangle.Position + new Vector3(rectangle.Length, rectangle.Width, rectangle.Height);
+                    float distToLeft = Math.Abs(camera!.Position.X - min.X);
+                    float distToRight = Math.Abs(camera.Position.X - max.X);
+                    float distToBack = Math.Abs(camera.Position.Z - min.Z);
+                    float distToFront = Math.Abs(camera.Position.Z - max.Z);
+                    float distToTop = Math.Abs(camera.Position.Y - max.Y);
+                    float distToBottom = Math.Abs(camera.Position.Y - min.Y);
+
+                    Vector3 rectangleNormal = new(-1, 0, 0);
+                    float minDist = distToLeft;
+                    if (distToRight < minDist)
+                    {
+                        minDist = distToRight;
+                        rectangleNormal = new(1, 0, 0);
+                    }
+                    if (distToBack < minDist)
+                    {
+                        minDist = distToBack;
+                        rectangleNormal = new(0, 0, -1);
+                    }
+                    if (distToFront < minDist)
+                    {
+                        minDist = distToFront;
+                        rectangleNormal = new(0, 0, 1);
+                    }
+                    if (distToTop < minDist)
+                    {
+                        minDist = distToTop;
+                        rectangleNormal = new(0, 1, 0);
+                    }
+                    if (distToBottom < minDist)
+                    {
+                        rectangleNormal = new(0, -1, 0);
+                    }
+                    Vector3 moveDir = velocity * Vector3.Normalize(proposedPosition);
+                    Vector3 slideDir = moveDir - Vector3.Dot(moveDir, rectangleNormal) * rectangleNormal;
+
+                    proposedPosition = camera.Position + slideDir;
+                    break;
+                }
+            }
+            camera!.Position = proposedPosition;
         }
 
         protected override void OnUnload() // garbage collection
