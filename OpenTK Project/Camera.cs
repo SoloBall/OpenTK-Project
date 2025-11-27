@@ -5,8 +5,8 @@ namespace OpenTK_Project
 {
     public class Camera
     {
-        public Vector3 Front = -Vector3.UnitZ;
-        public Vector3 Up = Vector3.UnitY;
+        public Vector3 Front = Vector3.UnitX;
+        public Vector3 Up = Vector3.UnitZ;
         public Vector3 Right => Vector3.Normalize(Vector3.Cross(Front, Up));
 
 
@@ -24,8 +24,8 @@ namespace OpenTK_Project
 
             Vector3 direction = new(
                 MathF.Cos(yawRads) * MathF.Cos(pitchRads),
-                MathF.Sin(pitchRads),
-                MathF.Cos(pitchRads) * MathF.Sin(yawRads)
+                MathF.Cos(pitchRads) * MathF.Sin(yawRads),
+                MathF.Sin(pitchRads)
                 );
 
             Front = direction.Normalized();

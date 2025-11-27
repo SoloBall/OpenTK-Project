@@ -4,8 +4,6 @@ using OpenTK.Windowing.Desktop;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
 
 namespace OpenTK_Project
 {
@@ -13,8 +11,12 @@ namespace OpenTK_Project
     {
         private int VertexBufferHandle;
         private int ShaderProgramHandle;
+        private int PostProgramHandle;
         private int VertexArrayHandle;
         private int IndexBufferHandle;
+        private int DepthTexture;
+        private int FrameBufferHandle;
+        private int quadVertexArrayHandle;
 
         private Camera? camera;
         private float deltaTime;
@@ -53,12 +55,14 @@ namespace OpenTK_Project
 
             GL.Enable(EnableCap.DepthTest);
 
-            Rectangle plane = new(50, 50, 1);
+            Rectangle glitchyPlane = new(50, 50, 1);
             for (int i = 0; i < 200; i++)
             {
-                rectangles.Add(plane);
+                rectangles.Add(glitchyPlane);
             }
-            updateRectangles();
+            Rectangle plane = new(50, 1, 50, camera.Position - Vector3.UnitY * 2);
+            rectangles.Add(plane);
+            GenerateBuffers();
 
             base.OnLoad();
         }
@@ -66,7 +70,7 @@ namespace OpenTK_Project
         {
             base.OnUpdateFrame(args);
 
-            updateRectangles();
+            UpdateRectangles();
             deltaTime = (float)args.Time;
             float velocity = camera!.speed * deltaTime;
 
@@ -112,6 +116,8 @@ namespace OpenTK_Project
         
         protected override void OnRenderFrame(FrameEventArgs args)
         {
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
+            GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             GL.UseProgram(ShaderProgramHandle);
@@ -124,6 +130,30 @@ namespace OpenTK_Project
 
             GL.DrawElements(PrimitiveType.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0);
 
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            GL.Disable(EnableCap.DepthTest);
+            GL.DepthMask(false);
+            GL.UseProgram(PostProgramHandle);
+
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
+
+            int depthTextureLocation = GL.GetUniformLocation(PostProgramHandle, "depthTexture");
+            GL.Uniform1(depthTextureLocation, 0);
+
+            Vector2 screenSize = new Vector2(ClientSize.X, ClientSize.Y);
+            int screenSizeLocation = GL.GetUniformLocation(PostProgramHandle, "screenSize");
+            GL.Uniform2(screenSizeLocation, ref screenSize);
+
+            int outlineColorLocaiton = GL.GetUniformLocation(PostProgramHandle, "outlineColor");
+            GL.Uniform3(outlineColorLocaiton, (1, 1, 1)); // literally does nothing
+
+            GL.BindVertexArray(quadVertexArrayHandle);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+            GL.Enable(EnableCap.DepthTest);
+            GL.DepthMask(true);
             this.Context.SwapBuffers();
             base.OnRenderFrame(args);
         }
@@ -141,7 +171,7 @@ namespace OpenTK_Project
             lastMousePos = e.Position;
 
             camera!.Pitch -= deltaMousePos.Y * camera.sensitivity;
-            camera.Yaw += deltaMousePos.X * camera.sensitivity;
+            camera.Yaw -= deltaMousePos.X * camera.sensitivity;
             camera.Pitch = Math.Clamp(camera.Pitch, -89f, 89f);
 
             camera.UpdateDirection();
@@ -152,54 +182,56 @@ namespace OpenTK_Project
             base.OnResize(e);
         }
 
-        void updateRectangles()
+        void GenerateBuffers( )
         {
             List<VertexPositionColor> vertices = new();
-            for (int i = 0; i < rectangles!.Count(); i++)                                               //hellish code :/
+            for ( int i = 0; i < rectangles!.Count(); i++ )
             {
                 Rectangle rectangle = rectangles![i];
+
                 // face 1
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Z, rectangle.Position.Y),
                     rectangle.Color));
 
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Position.Z),
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Position.Y),
                     rectangle.Color));
 
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
                     rectangle.Color));
 
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
                     rectangle.Color));
 
                 // face 2
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Position.Z),
+                    new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Position.Y),
                     rectangle.Color));
 
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
+                    new Vector3(rectangle.Position.X, rectangle.Position.Z, rectangle.Position.Y),
                     rectangle.Color));
 
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    new Vector3(rectangle.Position.X, rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
                     rectangle.Color));
 
                 vertices.Add(
                 new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Height + rectangle.Position.Y, rectangle.Width + rectangle.Position.Z),
+                    new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
                     rectangle.Color));
-            };
+            }
+
 
             int[] rectangleIndices = {
                 0,1,2,  2,3,0,
@@ -211,9 +243,9 @@ namespace OpenTK_Project
             };
 
             List<int> indices = new();
-            for (int i = 0; i < vertices.Count(); i++)
+            for ( int i = 0; i < vertices.Count(); i++ )
             {
-                foreach (int index in rectangleIndices)
+                foreach ( int index in rectangleIndices )
                 {
                     indices.Add(index + i * 8);
                 }
@@ -223,7 +255,7 @@ namespace OpenTK_Project
             // using vertexbuffer to send data to GPU
             int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
 
-            if (VertexBufferHandle != 0)
+            if ( VertexBufferHandle != 0 )
             {
                 GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
                 GL.BindVertexArray(0);
@@ -257,7 +289,60 @@ namespace OpenTK_Project
             GL.EnableVertexAttribArray(vertexPositionColorAttrib1.Index);
 
 
+            DepthTexture = GL.GenTexture();
+            GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.DepthComponent32, this.ClientSize.X, this.ClientSize.Y, 0, PixelFormat.DepthComponent, PixelType.Float, IntPtr.Zero);
+
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)All.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)All.Nearest);
+
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)All.None);
+
+
+
+            FrameBufferHandle = GL.GenFramebuffer();
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
+            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, DepthTexture, 0);
+
+            //optional, until i add colors to the shit
+            GL.DrawBuffer(DrawBufferMode.None);
+            GL.ReadBuffer(ReadBufferMode.None);
+
+            var status = GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
+            if (status != FramebufferErrorCode.FramebufferComplete )
+            {
+                Console.WriteLine($"FBO not complete: {status}");
+            }
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+
+
+            float[] quadVerts = {
+                // positions (clip space)
+                -1f, -1f,
+                 1f, -1f,
+                 1f,  1f,
+
+                -1f, -1f,
+                 1f,  1f,
+                -1f,  1f    
+            };
+
+            quadVertexArrayHandle = GL.GenVertexArray();
+            int quadVertexBufferHandle = GL.GenBuffer();
+
+            GL.BindVertexArray(quadVertexArrayHandle);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, quadVertexBufferHandle);
+            GL.BufferData(BufferTarget.ArrayBuffer, quadVerts.Length * sizeof(float), quadVerts, BufferUsageHint.StaticDraw);
+
+            // vPosition is location = 0 in the post-process vertex shader
+            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), 0);
+            GL.EnableVertexAttribArray(0);
+
             GL.BindVertexArray(0);
+
+
             //defining the code for shaders -- what they do
             string vertexShaderSource =
             @"
@@ -290,7 +375,7 @@ namespace OpenTK_Project
             out vec4 color;
 
             void main(){
-                float lightRadius = 5;
+                float lightRadius = 50;
                 float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
                 color = fColor * (1 - darkFactor);
             }
@@ -301,7 +386,7 @@ namespace OpenTK_Project
             GL.CompileShader(vertexShaderHandle);
 
             string vertexShaderInfo = GL.GetShaderInfoLog(vertexShaderHandle);
-            if (vertexShaderInfo != string.Empty)
+            if ( vertexShaderInfo != string.Empty )
             {
                 Console.WriteLine("Error during compilation of vertex shader: " + vertexShaderInfo);
             }
@@ -311,12 +396,12 @@ namespace OpenTK_Project
             GL.CompileShader(fragmentShaderHandle);
 
             string fragmentShaderInfo = GL.GetShaderInfoLog(fragmentShaderHandle);
-            if (fragmentShaderInfo != string.Empty)
+            if ( fragmentShaderInfo != string.Empty )
             {
                 Console.WriteLine("Error during compilation of fragment shader: " + fragmentShaderInfo);
             }
 
-            if (ShaderProgramHandle != 0)
+            if ( ShaderProgramHandle != 0 )
             {
                 GL.DeleteProgram(ShaderProgramHandle);
             }
@@ -333,9 +418,170 @@ namespace OpenTK_Project
             GL.DeleteShader(vertexShaderHandle);
             GL.DeleteShader(fragmentShaderHandle);
 
-
-
             GL.UseProgram(ShaderProgramHandle);
+
+            string screenVertexShaderSource =
+            @"
+            #version 330 core
+
+            layout (location = 0) in vec2 vPosition;
+            out vec2 uv;
+
+            void main() {
+                uv = vPosition * 0.5 + 0.5;
+                gl_Position = vec4(vPosition, 0.0, 1.0);
+            }
+            ";
+
+            string screenFragmentShaderSource =
+            @"
+            #version 330 core
+
+            uniform sampler2D depthTexture;
+            uniform vec2 screenSize;
+            uniform vec3 outlineColor;
+            in vec2 uv;
+            out vec4 fragColor;
+
+            void main(){
+
+                float center = texture(depthTexture, uv).r;
+                vec2 pixel = 1.0 / screenSize;
+
+                float right = texture(depthTexture, uv + vec2(pixel.x, 0)).r;
+                float left = texture(depthTexture, uv + vec2(-pixel.x, 0)).r;
+                float up = texture(depthTexture, uv + vec2(0, pixel.y)).r;
+                float down = texture(depthTexture, uv + vec2(0, -pixel.y)).r;
+
+                float difference =
+                    abs(center - right) + 
+                    abs(center - left) + 
+                    abs(center - up) + 
+                    abs(center - down); 
+
+                float outline = difference  > 0.0005 ? 1.0 : 0.0;
+                
+                vec3 base = vec3(0.2, 0.2, 0.2);
+                vec3 final = mix(base, outlineColor, outline);
+                fragColor = vec4(final, 1.0);
+            }
+            ";
+
+            int screenVertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
+            GL.ShaderSource(screenVertexShaderHandle, screenVertexShaderSource);
+            GL.CompileShader(screenVertexShaderHandle);
+
+            string screenVertexShaderInfo = GL.GetShaderInfoLog(screenVertexShaderHandle);
+            if ( screenVertexShaderInfo != string.Empty )
+            {
+                Console.WriteLine("Error during compilation of screen vertex shader: " + screenVertexShaderInfo);
+            }
+
+            int screenFragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
+            GL.ShaderSource(screenFragmentShaderHandle, screenFragmentShaderSource);
+            GL.CompileShader(screenFragmentShaderHandle);
+
+            string screenFragmentShaderInfo = GL.GetShaderInfoLog(screenFragmentShaderHandle);
+            if ( screenFragmentShaderInfo != string.Empty )
+            {
+                Console.WriteLine("Error during compilation of screen fragment shader: " + screenFragmentShaderInfo);
+            }
+
+            if ( PostProgramHandle != 0 )
+            {
+                GL.DeleteProgram(PostProgramHandle);
+            }
+            PostProgramHandle = GL.CreateProgram();
+
+            GL.AttachShader(PostProgramHandle, screenVertexShaderHandle);
+            GL.AttachShader(PostProgramHandle, screenFragmentShaderHandle);
+
+            GL.LinkProgram(PostProgramHandle);
+
+            GL.DetachShader(PostProgramHandle, screenVertexShaderHandle);
+            GL.DetachShader(PostProgramHandle, screenFragmentShaderHandle);
+
+            GL.DeleteShader(screenVertexShaderHandle);
+            GL.DeleteShader(screenFragmentShaderHandle);
+        }
+        void UpdateRectangles()
+        {
+            List<VertexPositionColor> vertices = new();
+            for ( int i = 0; i < rectangles!.Count(); i++ )
+            {
+                Rectangle rectangle = rectangles![i];
+
+                // face 1
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Z, rectangle.Position.Y),
+                    rectangle.Color));
+
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Position.Y),
+                    rectangle.Color));
+
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
+                    rectangle.Color));
+
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
+                    rectangle.Color));
+
+                // face 2
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Position.Y),
+                    rectangle.Color));
+
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Position.Z, rectangle.Position.Y),
+                    rectangle.Color));
+
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
+                    rectangle.Color));
+
+                vertices.Add(
+                new VertexPositionColor(
+                    new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Z, rectangle.Height + rectangle.Position.Y),
+                    rectangle.Color));
+            }
+
+            int[] rectangleIndices = {
+                0,1,2,  2,3,0,
+                1,4,7,  7,2,1,
+                4,5,6,  6,7,4,
+                5,0,3,  3,6,5,
+                1,0,5,  5,4,1,
+                3,2,7,  3,7,6
+            };
+
+            List<int> indices = new();
+            for ( int i = 0; i < vertices.Count(); i++ )
+            {
+                foreach ( int index in rectangleIndices )
+                {
+                    indices.Add(index + i * 8);
+                }
+            }
+
+            indicesCount = indices.Count();
+            // using vertexbuffer to send data to GPU
+            int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
+            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
+
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
 
             Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), Size.X / Size.Y, 0.1f, 100f);
             Matrix4 view = camera!.GetMatrix();
@@ -352,15 +598,16 @@ namespace OpenTK_Project
             GL.UniformMatrix4(modelLocation, false, ref model);
 
             GL.Uniform3(cameraPosLocation, camera.Position);
-            GL.UseProgram(0);
         }
         public void CameraCollidesWithRectangle(Vector3 proposedPosition, float velocity)
         {
             float radius = 1f;
             foreach (Rectangle rectangle in rectangles!) 
             {
+                if (rectangle.Position == Vector3.Zero) continue; // check for whether it's close enough for optimization
                 if (rectangle.CollidesWithSphere(proposedPosition, radius)) //WIP
                 {
+                    Console.WriteLine("collides");
                     Vector3 min = rectangle.Position;
                     Vector3 max = rectangle.Position + new Vector3(rectangle.Length, rectangle.Width, rectangle.Height);
                     float distToLeft = Math.Abs(camera!.Position.X - min.X);
