@@ -15,6 +15,7 @@ namespace OpenTK_Project
         private int VertexArrayHandle;
         private int IndexBufferHandle;
         private int DepthTexture;
+        private int SceneTexture;
         private int FrameBufferHandle;
         private int quadVertexArrayHandle;
 
@@ -60,7 +61,7 @@ namespace OpenTK_Project
             {
                 rectangles.Add(glitchyPlane);
             }
-            Rectangle plane = new(50, 1, 50, camera.Position - Vector3.UnitY * 2);
+            Rectangle plane = new(50, 50, 1, camera.Position - Vector3.UnitY * 2);
             rectangles.Add(plane);
             GenerateBuffers();
 
@@ -128,18 +129,22 @@ namespace OpenTK_Project
             int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
             GL.UniformMatrix4(viewLocation, false, ref view);
 
+            int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
+            GL.Uniform3(cameraPosLocation, ref camera.Position);
+
             GL.DrawElements(PrimitiveType.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0);
 
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             GL.Disable(EnableCap.DepthTest);
             GL.DepthMask(false);
             GL.UseProgram(PostProgramHandle);
 
+
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
-
             int depthTextureLocation = GL.GetUniformLocation(PostProgramHandle, "depthTexture");
             GL.Uniform1(depthTextureLocation, 0);
 
@@ -148,12 +153,19 @@ namespace OpenTK_Project
             GL.Uniform2(screenSizeLocation, ref screenSize);
 
             int outlineColorLocaiton = GL.GetUniformLocation(PostProgramHandle, "outlineColor");
-            GL.Uniform3(outlineColorLocaiton, (1, 1, 1)); // literally does nothing
+            Vector3 outlineColor = new Vector3(0.2f, 0.2f, 0.2f);
+            GL.Uniform3(outlineColorLocaiton, outlineColor);
+
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.BindTexture(TextureTarget.Texture2D, SceneTexture);
+            int sceneTextureLocation = GL.GetUniformLocation(PostProgramHandle, "sceneTexture");
+            GL.Uniform1(sceneTextureLocation, 0);
 
             GL.BindVertexArray(quadVertexArrayHandle);
             GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
             GL.Enable(EnableCap.DepthTest);
             GL.DepthMask(true);
+
             this.Context.SwapBuffers();
             base.OnRenderFrame(args);
         }
@@ -293,22 +305,24 @@ namespace OpenTK_Project
             GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
             GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.DepthComponent32, this.ClientSize.X, this.ClientSize.Y, 0, PixelFormat.DepthComponent, PixelType.Float, IntPtr.Zero);
 
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)All.Nearest);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)All.Nearest);
+            FrameBufferHandle = GL.GenFramebuffer();
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
+            GL.DrawBuffer(DrawBufferMode.ColorAttachment0);
+            GL.ReadBuffer(ReadBufferMode.ColorAttachment0);
+            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, DepthTexture, 0);
+
+            GL.CreateTextures(TextureTarget.Texture2D, 1, out SceneTexture);
+            GL.BindTexture(TextureTarget.Texture2D, SceneTexture);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, ClientSize.X, ClientSize.Y, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
 
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
             GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)All.None);
 
+            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, SceneTexture, 0);
 
-
-            FrameBufferHandle = GL.GenFramebuffer();
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
-            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, DepthTexture, 0);
-
-            //optional, until i add colors to the shit
-            GL.DrawBuffer(DrawBufferMode.None);
-            GL.ReadBuffer(ReadBufferMode.None);
 
             var status = GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
             if (status != FramebufferErrorCode.FramebufferComplete )
@@ -374,10 +388,14 @@ namespace OpenTK_Project
             uniform vec3 cameraPos;
             out vec4 color;
 
+            vec4 quantize(vec4 color, float steps){
+                return floor((color * steps) / steps);
+            }
             void main(){
                 float lightRadius = 50;
                 float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
-                color = fColor * (1 - darkFactor);
+                vec4 darkFragColor = fColor * (1 - darkFactor);
+                color = (floor(darkFragColor * 12) / 6);
             }
             ";
 
@@ -438,13 +456,14 @@ namespace OpenTK_Project
             #version 330 core
 
             uniform sampler2D depthTexture;
+            uniform sampler2D sceneTexture;
             uniform vec2 screenSize;
             uniform vec3 outlineColor;
             in vec2 uv;
             out vec4 fragColor;
 
             void main(){
-
+                vec3 sceneColor = texture(sceneTexture, uv).rgb;
                 float center = texture(depthTexture, uv).r;
                 vec2 pixel = 1.0 / screenSize;
 
@@ -459,11 +478,10 @@ namespace OpenTK_Project
                     abs(center - up) + 
                     abs(center - down); 
 
-                float outline = difference  > 0.0005 ? 1.0 : 0.0;
+                float outline = difference  > 0.005 ? 1.0 : 0.0;
                 
-                vec3 base = vec3(0.2, 0.2, 0.2);
-                vec3 final = mix(base, outlineColor, outline);
-                fragColor = vec4(final, 1.0);
+                vec3 final = mix(sceneColor, outlineColor, outline);
+                fragColor = vec4(final, 1);
             }
             ";
 
@@ -607,7 +625,6 @@ namespace OpenTK_Project
                 if (rectangle.Position == Vector3.Zero) continue; // check for whether it's close enough for optimization
                 if (rectangle.CollidesWithSphere(proposedPosition, radius)) //WIP
                 {
-                    Console.WriteLine("collides");
                     Vector3 min = rectangle.Position;
                     Vector3 max = rectangle.Position + new Vector3(rectangle.Length, rectangle.Width, rectangle.Height);
                     float distToLeft = Math.Abs(camera!.Position.X - min.X);

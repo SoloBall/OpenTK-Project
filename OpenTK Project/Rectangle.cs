@@ -28,13 +28,6 @@ namespace OpenTK_Project
             {
                 result = false;
             }
-            Console.Write("sphere: ");
-            Console.WriteLine(sphereCenter);
-            Console.Write("Square min: ");
-            Console.WriteLine(min);
-            Console.Write("square max: ");
-            Console.WriteLine(max);
-            Console.WriteLine();
             return result;
             /*Vector3 min = Position;
             Vector3 max = Position + new Vector3(Length, Width, Height);
