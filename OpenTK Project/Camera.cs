@@ -1,5 +1,6 @@
 ﻿using OpenTK.Graphics.ES11;
 using OpenTK.Mathematics;
+using System.Reflection.Metadata.Ecma335;
 
 namespace OpenTK_Project
 {
@@ -10,7 +11,7 @@ namespace OpenTK_Project
         public Vector3 Right => Vector3.Normalize(Vector3.Cross(Front, Up));
 
 
-        public Vector3 Position = new(50000, 50000, 50000);
+        public Vector3 Position = new(0, 0, 0);
         public float Yaw = 0;
         public float Pitch = 0;
 
@@ -33,6 +34,27 @@ namespace OpenTK_Project
             Front = direction.Normalized();
         }
 
+        // proposed position is calculating from min, change to interprit the entirety of the rectangle
+        public bool IsLookingAtRectangle(Rectangle rectangle)
+        {
+            Vector3 proposedRectanglePosition = Position + Vector3.Distance(rectangle.Position, Position) * Front;
+            Vector3 min = rectangle.Position;
+            Vector3 max = min + new Vector3(rectangle.Length, rectangle.Width, rectangle.Height);
+
+            if (proposedRectanglePosition.X > min.X && proposedRectanglePosition.X < max.X )
+            {
+                if (proposedRectanglePosition.Y > min.Y && proposedRectanglePosition.Y < max.Y )
+                {
+                    if (proposedRectanglePosition.Z > min.Z && proposedRectanglePosition.Z < max.Z )
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+
+        }
         public Matrix4 GetMatrix()
         {
             return Matrix4.LookAt(Position, Position + Front, Up);

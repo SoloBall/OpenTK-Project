@@ -4,6 +4,7 @@ using OpenTK.Windowing.Desktop;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using System.Runtime.InteropServices;
 
 namespace OpenTK_Project
 {
@@ -18,6 +19,7 @@ namespace OpenTK_Project
         private int SceneTexture;
         private int FrameBufferHandle;
         private int quadVertexArrayHandle;
+        private int shaderStorageBufferHandle;
 
         private Camera? camera;
         private float deltaTime;
@@ -28,6 +30,7 @@ namespace OpenTK_Project
         private Random? rand;
 
         private List<Rectangle>? rectangles;
+        private Rectangle? selectedRectangle;
         public Game(int width = 1280, int height = 768, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
@@ -37,7 +40,7 @@ namespace OpenTK_Project
                 StartFocused = true,
                 API = ContextAPI.OpenGL,
                 Profile = ContextProfile.Core,
-                APIVersion = new(3, 3)
+                APIVersion = new(4, 5)
             })
         {
             this.CenterWindow();
@@ -94,6 +97,7 @@ namespace OpenTK_Project
             }
             if (proposedPosition != camera.Position)
             {
+                UpdateSelectedRectanglePosition();
                 CameraCollidesWithRectangle(proposedPosition, velocity);
             }
 
@@ -101,11 +105,14 @@ namespace OpenTK_Project
             {
                 CursorState = CursorState.Normal;
             }
-            if ( keyboardInput.IsKeyDown(Keys.E) )
+            if ( keyboardInput.IsKeyPressed(Keys.E) )
             {
                 CreateGrid();
             }
-
+            if ( keyboardInput.IsKeyPressed(Keys.X) )
+            {
+                rectangles!.Clear();
+            }
             if (MouseState.IsButtonPressed(MouseButton.Left))
             {
                 int length = rand!.Next(1, 5);
@@ -113,11 +120,78 @@ namespace OpenTK_Project
                 int width = rand.Next(1, 5);
                 Color4 randomColor = new((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
                 Rectangle rectangle = new(length, height, width, camera.Position + camera.Front * 3, randomColor);
-                Console.WriteLine(rectangle.Position);
                 rectangles!.Add(rectangle);
+            }
+            if ( MouseState.IsButtonPressed(MouseButton.Right) )
+            {
+                for ( int i = 0; i < rectangles!.Count; i++ )
+                {
+                    if ( rectangles[i] != selectedRectangle && camera.IsLookingAtRectangle(rectangles[i]) )
+                    {
+                        Console.WriteLine("cube find: " + rectangles[i].Color.ToString());
+                        if (selectedRectangle != null )
+                        {
+                            if (Vector3.Distance(camera.Position, selectedRectangle.Position) > Vector3.Distance(camera.Position, rectangles[i].Position) )
+                            {
+                                foreach (Rectangle rectangle in rectangles )
+                                {
+                                    if (rectangle == selectedRectangle )
+                                    {
+                                        rectangle.Selected = false;
+                                    }
+                                }
+                                selectedRectangle = rectangles[i];
+                                rectangles[i].Selected = true;
+                            }
+                        }
+                        else
+                        {
+                            rectangles[i].Selected = true;
+                            selectedRectangle = rectangles[i];
+                        }
+                    }
+                }
+            }
+            if ( selectedRectangle != null )
+            {
+                if ( keyboardInput.IsKeyPressed(Keys.Q) )
+                {
+                    foreach (Rectangle rectangle in rectangles! )
+                    {
+                        if (rectangle == selectedRectangle )
+                        {
+                            rectangle.Selected = false;
+                        }
+                    }
+                    selectedRectangle = null;
+                    return;
+                }
+                UpdateSelectedRectanglePosition();
+            }
+            if ( camera.Position.X > 5000 && camera.Position.Y > 5000 )
+            {
+                Vector3 oldPosition = camera.Position;
+                camera.Position = camera.Position - oldPosition;
+                foreach (Rectangle rectangle in rectangles! )
+                {
+                    rectangle.Position = rectangle.Position - oldPosition;
+                }
             }
         }
         
+        void UpdateSelectedRectanglePosition( )
+        {
+            if (selectedRectangle != null )
+            {
+                float distance = Vector3.Distance(camera!.Position, selectedRectangle!.Position);
+                var scroll = MouseState.ScrollDelta.Y;
+                distance += scroll * 20 * (1 - deltaTime * 10);
+                distance = float.Clamp(distance, 1f, 40f);
+                Vector3 newPosition = Vector3.Lerp(selectedRectangle.Position, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
+
+                selectedRectangle.Position = newPosition;
+            }
+        }
         void CreateGrid(int size = 50, int spread = 3 )
         {
             for ( float x = 0; x < size; x += spread )
@@ -159,6 +233,23 @@ namespace OpenTK_Project
             GL.DepthMask(false);
             GL.UseProgram(PostProgramHandle);
 
+            int instanceCount = rectangles!.Count;
+            int structSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
+            InstanceStructs.RectangleInstance[] rectangleInstanceArray = new InstanceStructs.RectangleInstance[instanceCount];
+            for (int i = 0; i < instanceCount; i++ )
+            {
+                rectangleInstanceArray[i] = new InstanceStructs.RectangleInstance
+                {
+                    Length = rectangles[i].Length,
+                    Height = rectangles[i].Height,
+                    Width = rectangles[i].Width,
+                    Position = rectangles[i].Position,
+                    Color = rectangles[i].Color,
+                    Selected = rectangles[i].Selected ? 1.0f : 0.0f
+                };
+            }
+            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, shaderStorageBufferHandle);
+            GL.BufferSubData(BufferTarget.ShaderStorageBuffer, IntPtr.Zero, instanceCount * structSize, rectangleInstanceArray);
 
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
@@ -185,7 +276,8 @@ namespace OpenTK_Project
             GL.Uniform1(farPlaneLocation, camera.far);
 
             GL.BindVertexArray(quadVertexArrayHandle);
-            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+            GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, 6, instanceCount);
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             GL.Enable(EnableCap.DepthTest);
             GL.DepthMask(true);
 
@@ -194,7 +286,6 @@ namespace OpenTK_Project
         }
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
-            // loop through each rectangle, if it's in between camera.position and camera.position + camera.front * 20, select it, select only the closest
             base.OnMouseMove(e);
 
             if (isFirstMouse)
@@ -220,7 +311,15 @@ namespace OpenTK_Project
 
         void GenerateBuffers( )
         {
-            List<VertexPositionColor> vertices = ConvertRectanglesToVertices(rectangles!);
+            List<VertexPositionColor> vertices = [];
+            for ( int i = 0; i < rectangles!.Count; i++ )
+            {
+                if ( rectangles[i].Selected )
+                {
+                    rectangles[i] = selectedRectangle!;
+                }
+                vertices.AddRange(ConvertRectangleToVertices(rectangles[i]));
+            }
 
             List<int> indices = GetRectangleIndices(vertices.Count());
             indicesCount = indices.Count();
@@ -361,6 +460,16 @@ namespace OpenTK_Project
 
             GL.UseProgram(ShaderProgramHandle);
 
+            shaderStorageBufferHandle = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, shaderStorageBufferHandle);
+
+            int instanceCount = rectangles.Count;
+            int structSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
+
+            GL.BufferData(BufferTarget.ShaderStorageBuffer, instanceCount * structSize, IntPtr.Zero, BufferUsageHint.DynamicDraw);
+
+            GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, shaderStorageBufferHandle);
+
             string screenVertexShaderSource = ShaderControls.GetScreenVertexShaderSource();
 
             string screenFragmentShaderSource = ShaderControls.GetScreenFragmentShaderSource();
@@ -402,48 +511,42 @@ namespace OpenTK_Project
             GL.DeleteShader(screenVertexShaderHandle);
             GL.DeleteShader(screenFragmentShaderHandle);
         }
-        List<VertexPositionColor> ConvertRectanglesToVertices(List<Rectangle> rectangles)
+        List<VertexPositionColor> ConvertRectangleToVertices(Rectangle rectangle)
         {
             List<VertexPositionColor> vertices = new();
-            for ( int i = 0; i < rectangles!.Count(); i++ )
-            {
-                Rectangle rectangle = rectangles![i];
+            // face 1
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
+                rectangle.Color));
 
-                // face 1
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
-                    rectangle.Color));
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Position.Z),
+                rectangle.Color));
 
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Position.Z),
-                    rectangle.Color));
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
+                rectangle.Color));
 
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                    rectangle.Color));
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
+                rectangle.Color));
 
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                    rectangle.Color));
+            // face 2
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Position.Z),
+                rectangle.Color));
 
-                // face 2
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Position.Z),
-                    rectangle.Color));
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
+                rectangle.Color));
 
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
-                    rectangle.Color));
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
+                rectangle.Color));
 
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                    rectangle.Color));
-
-                vertices.Add(new VertexPositionColor(
-                    new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                    rectangle.Color));
-            }
-
+            vertices.Add(new VertexPositionColor(
+                new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
+                rectangle.Color));
             return vertices;
         }
         List<int> GetRectangleIndices(int verticesCount)
@@ -469,7 +572,15 @@ namespace OpenTK_Project
         }
         void UpdateRectangles()
         {
-            List<VertexPositionColor> vertices = ConvertRectanglesToVertices(rectangles!);
+            List<VertexPositionColor> vertices = [];
+            for (int i = 0; i < rectangles!.Count; i++ )
+            {
+                if (rectangles[i].Selected)
+                {
+                    rectangles[i] = selectedRectangle!;
+                }
+                vertices.AddRange(ConvertRectangleToVertices(rectangles[i]));
+            }
 
             List<int> indices = GetRectangleIndices(vertices.Count());
             indicesCount = indices.Count();
@@ -484,7 +595,7 @@ namespace OpenTK_Project
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
 
-            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), Size.X / Size.Y, camera!.near, camera.far);
+            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), ClientSize.X / ClientSize.Y, camera!.near, camera.far);
             Matrix4 view = camera!.GetMatrix();
             Matrix4 model = Matrix4.Identity;
 

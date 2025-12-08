@@ -12,7 +12,7 @@ namespace OpenTK_Project
         {
             string source = 
                 @"
-            #version 330 core
+            #version 450 core
 
             layout (location = 0) in vec3 vPosition;
             layout (location = 1) in vec4 vColor;
@@ -37,7 +37,7 @@ namespace OpenTK_Project
         {
             string source =
                @"
-            #version 330 core
+            #version 450 core
 
             in vec4 fColor;
             in vec3 fPos;
@@ -47,8 +47,8 @@ namespace OpenTK_Project
             void main(){
                 float lightRadius = 40;
                 float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
-                if (darkFactor < 0.3) {
-                    darkFactor = 0.0;
+                if (darkFactor < 0.1) {
+                    darkFactor = 0.1;
                 }
                 vec4 darkFragColor = fColor * (1 - darkFactor);
                 color = (floor(darkFragColor * 16) / 16);
@@ -60,14 +60,35 @@ namespace OpenTK_Project
         {
             string source =
                 @"
-            #version 330 core
+            #version 450 core
 
             layout (location = 0) in vec2 vPosition;
+            
+            struct RectangleInstance {
+                float Length;
+                float Height;
+                float Width;
+                vec3 Position;
+                vec4 Color;
+                float Selected;
+            };
+            
+            layout(std430, binding = 0) buffer InstanceBuffer {
+                RectangleInstance data[];
+            };
+
             out vec2 uv;
+            out float selected;
+            out vec3 rectanglePosition;
 
             void main() {
+                RectangleInstance rectangle = data[gl_InstanceID];
+
                 uv = vPosition * 0.5 + 0.5;
                 gl_Position = vec4(vPosition, 0.0, 1.0);
+
+                selected = rectangle.Selected;
+                rectanglePosition = rectangle.Position;
             }
             ";
             return source;
@@ -76,7 +97,7 @@ namespace OpenTK_Project
         {
             string source =
                 @"
-            #version 330 core
+            #version 450 core
 
             uniform sampler2D sceneTexture;
             uniform sampler2D depthTexture;
@@ -86,6 +107,9 @@ namespace OpenTK_Project
             uniform float nearPlane;
             uniform float farPlane;
             in vec2 uv;
+            in float selected;
+            in vec3 rectanglePosition;
+
             out vec4 fragColor;
 
             void main(){
@@ -97,10 +121,6 @@ namespace OpenTK_Project
                 float left = length(texture(depthTexture, uv + vec2(-pixel.x, 0)).rgb);
                 float up = length(texture(depthTexture, uv + vec2(0, pixel.y)).rgb);
                 float down = length(texture(depthTexture, uv + vec2(0, -pixel.y)).rgb);
-                float rightUp = texture(depthTexture, uv + vec2(pixel.x, pixel.y)).r;
-                float rightDown = texture(depthTexture, uv + vec2(pixel.x, -pixel.y)).r;
-                float leftUp = texture(depthTexture, uv + vec2(-pixel.x, pixel.y)).r;
-                float leftDown = texture(depthTexture, uv + vec2(-pixel.x, -pixel.y)).r;
 
                 float difference =
                     abs(center - right) + 
@@ -113,8 +133,11 @@ namespace OpenTK_Project
                 if (dist > 0.2) {
                     outline = 0.0;
                 }
-                //vec3 outlineColorNew = vec3(1 - sceneColor.r, 1 - sceneColor.g, 1 - sceneColor.b);
-                vec3 final = mix(sceneColor, outlineColor, outline);
+                vec3 outlineColorNew = outlineColor;
+                if (selected > 0.5){
+                    outlineColorNew = vec3(0, 1, 1);
+                }
+                vec3 final = mix(sceneColor, outlineColorNew, outline);
                 fragColor = vec4(final, 1);
             }
             ";

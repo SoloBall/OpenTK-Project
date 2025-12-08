@@ -10,15 +10,15 @@ namespace OpenTK_Project
         public Color4 Color;
         public bool Selected;
 
-        public Rectangle(int length, int height, int width, Vector3? position = null, Color4? color = null, bool selected = false)
+        public Rectangle(int length, int height, int width, Vector3? position = null, Color4? color = null, bool selected = false )
         {
             Length = length;
             Height = height;
             Width = width;
-            Position = position ?? new Vector3 (0, 0, 0);
+            Position = position ?? new Vector3(0, 0, 0);
             Color = color ?? new Color4(1f, 1f, 1f, 1f);
             Selected = selected;
-        }
+         }
         // is missing radius
         public bool CollidesWithSphere(Vector3 sphereCenter, float radius)
         {
