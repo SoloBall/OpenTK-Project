@@ -21,6 +21,8 @@ namespace OpenTK_Project
         private int quadVertexArrayHandle;
         private int shaderStorageBufferHandle;
 
+        private IntPtr MappedPtr;
+
         private Camera? camera;
         private float deltaTime;
         private Vector2 lastMousePos;
@@ -31,6 +33,8 @@ namespace OpenTK_Project
 
         private List<Rectangle>? rectangles;
         private Rectangle? selectedRectangle;
+        private int rectangleStructSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
+
         public Game(int width = 1280, int height = 768, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
@@ -68,7 +72,6 @@ namespace OpenTK_Project
         {
             base.OnUpdateFrame(args);
 
-            UpdateRectangles();
             deltaTime = (float)args.Time;
             float velocity = camera!.speed * deltaTime;
 
@@ -138,15 +141,18 @@ namespace OpenTK_Project
                                     if (rectangle == selectedRectangle )
                                     {
                                         rectangle.Selected = false;
+                                        rectangle.Dirty = true;
                                     }
                                 }
-                                selectedRectangle = rectangles[i];
                                 rectangles[i].Selected = true;
+                                rectangles[i].Dirty = true;
+                                selectedRectangle = rectangles[i];
                             }
                         }
                         else
                         {
                             rectangles[i].Selected = true;
+                            rectangles[i].Dirty = true;
                             selectedRectangle = rectangles[i];
                         }
                     }
@@ -160,6 +166,7 @@ namespace OpenTK_Project
                     {
                         if (rectangle == selectedRectangle )
                         {
+                            rectangle.Dirty = true;
                             rectangle.Selected = false;
                         }
                     }
@@ -174,6 +181,7 @@ namespace OpenTK_Project
                 camera.Position = camera.Position - oldPosition;
                 foreach (Rectangle rectangle in rectangles! )
                 {
+                    rectangle.Dirty = true;
                     rectangle.Position = rectangle.Position - oldPosition;
                 }
             }
@@ -190,9 +198,10 @@ namespace OpenTK_Project
                 Vector3 newPosition = Vector3.Lerp(selectedRectangle.Position, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
 
                 selectedRectangle.Position = newPosition;
+                selectedRectangle.Dirty = true;
             }
         }
-        void CreateGrid(int size = 50, int spread = 3 )
+        void CreateGrid(int size = 25, int spread = 5 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -208,6 +217,8 @@ namespace OpenTK_Project
         }
         protected override void OnRenderFrame(FrameEventArgs args)
         {
+            UpdateRectangles();
+
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
             GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
@@ -233,23 +244,31 @@ namespace OpenTK_Project
             GL.DepthMask(false);
             GL.UseProgram(PostProgramHandle);
 
-            int instanceCount = rectangles!.Count;
-            int structSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
-            InstanceStructs.RectangleInstance[] rectangleInstanceArray = new InstanceStructs.RectangleInstance[instanceCount];
-            for (int i = 0; i < instanceCount; i++ )
+
+            unsafe
             {
-                rectangleInstanceArray[i] = new InstanceStructs.RectangleInstance
+                InstanceStructs.RectangleInstance* gpuData = (InstanceStructs.RectangleInstance*)MappedPtr;
+                
+                for (int i = 0; i < rectangles!.Count; i++ )
                 {
-                    Length = rectangles[i].Length,
-                    Height = rectangles[i].Height,
-                    Width = rectangles[i].Width,
-                    Position = rectangles[i].Position,
-                    Color = rectangles[i].Color,
-                    Selected = rectangles[i].Selected ? 1.0f : 0.0f
-                };
+                    if (!rectangles[i].Dirty)
+                    {
+                        continue;
+                    }
+
+                    gpuData[i] = new InstanceStructs.RectangleInstance
+                    {
+                        Length = rectangles[i].Length,
+                        Height = rectangles[i].Height,
+                        Width = rectangles[i].Width,
+                        Position = rectangles[i].Position,
+                        Color = rectangles[i].Color,
+                        Selected = rectangles[i].Selected ? 1.0f : 0.0f
+                    };
+
+                    rectangles[i].Dirty = false;
+                }
             }
-            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, shaderStorageBufferHandle);
-            GL.BufferSubData(BufferTarget.ShaderStorageBuffer, IntPtr.Zero, instanceCount * structSize, rectangleInstanceArray);
 
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
@@ -276,7 +295,7 @@ namespace OpenTK_Project
             GL.Uniform1(farPlaneLocation, camera.far);
 
             GL.BindVertexArray(quadVertexArrayHandle);
-            GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, 6, instanceCount);
+            GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, 6, rectangles.Count);
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             GL.Enable(EnableCap.DepthTest);
             GL.DepthMask(true);
@@ -309,6 +328,7 @@ namespace OpenTK_Project
             base.OnResize(e);
         }
 
+        [Obsolete]
         void GenerateBuffers( )
         {
             List<VertexPositionColor> vertices = [];
@@ -462,13 +482,24 @@ namespace OpenTK_Project
 
             shaderStorageBufferHandle = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ShaderStorageBuffer, shaderStorageBufferHandle);
+            int maxInstances = 5000;
 
-            int instanceCount = rectangles.Count;
-            int structSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
-
-            GL.BufferData(BufferTarget.ShaderStorageBuffer, instanceCount * structSize, IntPtr.Zero, BufferUsageHint.DynamicDraw);
-
+            GL.BufferStorage(BufferTarget.ShaderStorageBuffer,
+                maxInstances * rectangleStructSize,
+                IntPtr.Zero,
+                BufferStorageFlags.MapWriteBit |
+                BufferStorageFlags.MapPersistentBit |
+                BufferStorageFlags.MapCoherentBit);
+            
             GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, shaderStorageBufferHandle);
+
+            MappedPtr = GL.MapBufferRange(
+                BufferTarget.ShaderStorageBuffer,
+                IntPtr.Zero,
+                maxInstances * rectangleStructSize,
+                BufferAccessMask.MapWriteBit |
+                BufferAccessMask.MapPersistentBit |
+                BufferAccessMask.MapCoherentBit);
 
             string screenVertexShaderSource = ShaderControls.GetScreenVertexShaderSource();
 
@@ -572,6 +603,7 @@ namespace OpenTK_Project
         }
         void UpdateRectangles()
         {
+            bool anyDirty = false;
             List<VertexPositionColor> vertices = [];
             for (int i = 0; i < rectangles!.Count; i++ )
             {
@@ -579,8 +611,17 @@ namespace OpenTK_Project
                 {
                     rectangles[i] = selectedRectangle!;
                 }
+                if (rectangles[i].Dirty)
+                {
+                    anyDirty = true;
+                }
                 vertices.AddRange(ConvertRectangleToVertices(rectangles[i]));
             }
+            if (!anyDirty)
+            {
+                return;
+            }
+            Console.WriteLine("updating");
 
             List<int> indices = GetRectangleIndices(vertices.Count());
             indicesCount = indices.Count();
