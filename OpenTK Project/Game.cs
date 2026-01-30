@@ -234,7 +234,7 @@ namespace OpenTK_Project
             int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
             GL.Uniform3(cameraPosLocation, ref camera.Position);
 
-            GL.DrawElements(PrimitiveType.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0);
+            GL.DrawElementsInstanced(BeginMode.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0, rectangles!.Count);
 
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
