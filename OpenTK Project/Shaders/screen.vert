@@ -24,8 +24,8 @@ void main() {
     RectangleInstance rectangle = data[gl_InstanceID];
 
     uv = vPosition * 0.5 + 0.5;
-    gl_Position = vec4(vec3(vPosition, 0.0) * vec3(rectangle.Width, rectangle.Height, rectangle.Length) + rectangle.Position.xyz, 1.0);
-
+    gl_Position = vec4(vPosition, 1.0, 1.0);
+    // wallah wrong
     selected = rectangle.Selected;
     rectanglePosition = rectangle.Position;
 }
