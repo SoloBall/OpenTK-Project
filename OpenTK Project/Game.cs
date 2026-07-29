@@ -286,6 +286,7 @@ namespace OpenTK_Project
         }
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
+            // loop through each rectangle, if it's in between camera.position and camera.position + camera.front * 20, select it, select only the closest
             base.OnMouseMove(e);
 
             if (isFirstMouse)

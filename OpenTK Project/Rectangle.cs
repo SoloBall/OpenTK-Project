@@ -5,7 +5,7 @@ namespace OpenTK_Project
 {
     public class Rectangle
     {
-        public int Length, Height, Width;
+        public int Length, Width, Height;
         public Vector3 Position;
         public Color4 Color;
         public bool Selected;
@@ -13,6 +13,7 @@ namespace OpenTK_Project
         public Rectangle(int length, int height, int width, Vector3? position = null, Color4? color = null, bool selected = false )
         {
             Length = length;
+            Width = width;
             Height = height;
             Width = width;
             Position = position ?? new Vector3(0, 0, 0);
