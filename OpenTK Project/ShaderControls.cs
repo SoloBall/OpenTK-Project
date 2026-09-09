@@ -109,18 +109,23 @@ namespace OpenTK_Project
             in vec2 uv;
             in float selected;
             in vec3 rectanglePosition;
-
             out vec4 fragColor;
+
+            float linearDepth(float raw) {
+                float z = raw * 2.0 - 1.0; // drop this if your projection already outputs 0..1 NDC directly
+                return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - raw * (farPlane - nearPlane));
+            }
 
             void main(){
                 vec3 sceneColor = texture(sceneTexture, uv).rgb;
-                float center = length(texture(depthTexture, uv).rgb);
                 vec2 pixel = 1.0 / screenSize;
 
-                float right = length(texture(depthTexture, uv + vec2(pixel.x, 0)).rgb);
-                float left = length(texture(depthTexture, uv + vec2(-pixel.x, 0)).rgb);
-                float up = length(texture(depthTexture, uv + vec2(0, pixel.y)).rgb);
-                float down = length(texture(depthTexture, uv + vec2(0, -pixel.y)).rgb);
+               float center = linearDepth(texture(depthTexture, uv).r);
+               float right  = linearDepth(texture(depthTexture, uv + vec2(pixel.x, 0)).r);
+               float left   = linearDepth(texture(depthTexture, uv + vec2(-pixel.x, 0)).r);
+               float up     = linearDepth(texture(depthTexture, uv + vec2(0, pixel.y)).r);
+               float down   = linearDepth(texture(depthTexture, uv + vec2(0, -pixel.y)).r);
+
 
                 float difference =
                     abs(center - right) + 
@@ -128,17 +133,14 @@ namespace OpenTK_Project
                     abs(center - up) + 
                     abs(center - down);
 
-                float outline = difference  > 0.004 ? 1.0 : 0.0;
+                float outline = difference  > 0.1 ? 1.0 : 0.0;
                 float dist = (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - center * (farPlane - nearPlane));
-                if (dist > 0.2) {
+                if (center > 50.0) {
                     outline = 0.0;
                 }
-                vec3 outlineColorNew = outlineColor;
-                if (selected > 0.5){
-                    outlineColorNew = vec3(0, 1, 1);
-                }
+                vec3 outlineColorNew = selected > 0.5 ? vec3(0.0, 1.0, 1.0) : outlineColor;
                 vec3 final = mix(sceneColor, outlineColorNew, outline);
-                fragColor = vec4(final, 1);
+                fragColor = vec4(final, 1.0);
             }
             ";
             return source;
