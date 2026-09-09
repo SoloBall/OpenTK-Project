@@ -1,9 +1,11 @@
 ﻿using OpenTK;
-using OpenTK.Windowing.Common;
-using OpenTK.Windowing.Desktop;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
+using OpenTK.Windowing.Common;
+using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace OpenTK_Project
@@ -22,12 +24,11 @@ namespace OpenTK_Project
         private int shaderStorageBufferHandle;
 
         private IntPtr MappedPtr;
-
+        
         private Camera? camera;
         private float deltaTime;
         private Vector2 lastMousePos;
         private bool isFirstMouse;
-        private int indicesCount;
 
         private Random? rand;
 
@@ -63,6 +64,7 @@ namespace OpenTK_Project
 
             GL.Enable(EnableCap.DepthTest);
             Rectangle plane = new(50, 1, 50, camera.Position - Vector3.UnitZ * 5);
+            plane.Mesh = CreateRectangleMesh(plane.Position, plane.Width, plane.Length, plane.Height, plane.Color);
             rectangles.Add(plane);
             GenerateBuffers();
 
@@ -123,6 +125,7 @@ namespace OpenTK_Project
                 int width = rand.Next(1, 5);
                 Color4 randomColor = new((float)rand.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
                 Rectangle rectangle = new(length, height, width, camera.Position + camera.Front * 3, randomColor);
+                rectangle.Mesh = CreateRectangleMesh(rectangle.Position, width, length, height, rectangle.Color);
                 rectangles!.Add(rectangle);
             }
             if ( MouseState.IsButtonPressed(MouseButton.Right) )
@@ -201,7 +204,7 @@ namespace OpenTK_Project
                 selectedRectangle.Dirty = true;
             }
         }
-        void CreateGrid(int size = 5, int spread = 5 )
+        void CreateGrid(int size = 25, int spread = 5 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -210,6 +213,7 @@ namespace OpenTK_Project
                     for ( float z = 0; z < size; z += spread )
                     {
                         Rectangle point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1));
+                        point.Mesh = CreateRectangleMesh(point.Position, point.Width, point.Length, point.Height, point.Color);
                         rectangles!.Add(point);
                     }
                 }
@@ -217,7 +221,7 @@ namespace OpenTK_Project
         }
         protected override void OnRenderFrame(FrameEventArgs args)
         {
-            UpdateRectangles();
+            int indicesCount = UpdateRectangles();
 
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
             GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
@@ -243,32 +247,6 @@ namespace OpenTK_Project
             GL.Disable(EnableCap.DepthTest);
             GL.DepthMask(false);
             GL.UseProgram(PostProgramHandle);
-
-
-            unsafe
-            {
-                InstanceStructs.RectangleInstance* gpuData = (InstanceStructs.RectangleInstance*)MappedPtr;
-                
-                for (int i = 0; i < rectangles!.Count; i++ )
-                {
-                    if (!rectangles[i].Dirty)
-                    {
-                        continue;
-                    }
-
-                    gpuData[i] = new InstanceStructs.RectangleInstance
-                    {
-                        Length = rectangles[i].Length,
-                        Height = rectangles[i].Height,
-                        Width = rectangles[i].Width,
-                        Position = rectangles[i].Position,
-                        Color = rectangles[i].Color,
-                        Selected = rectangles[i].Selected ? 1.0f : 0.0f
-                    };
-
-                    rectangles[i].Dirty = false;
-                }
-            }
 
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
@@ -329,21 +307,27 @@ namespace OpenTK_Project
             base.OnResize(e);
         }
 
-        [Obsolete]
         void GenerateBuffers( )
         {
             List<VertexPositionColor> vertices = [];
+            List<int> indices = [];
+            int vertexOffset = 0;
+            // convert to foreach mesh and add indices per iteration
             for ( int i = 0; i < rectangles!.Count; i++ )
             {
                 if ( rectangles[i].Selected )
                 {
                     rectangles[i] = selectedRectangle!;
                 }
-                vertices.AddRange(ConvertRectangleToVertices(rectangles[i]));
-            }
 
-            List<int> indices = GetRectangleIndices(vertices.Count());
-            indicesCount = indices.Count();
+                vertices.AddRange(rectangles[i].Mesh.Vertices);
+
+                foreach ( int index in rectangles[i].Mesh.Indices )
+                {
+                    indices.Add(index + vertexOffset);
+                }
+                vertexOffset += rectangles[i].Mesh.Vertices.Count();
+            }
 
             // using vertexbuffer to send data to GPU
             int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
@@ -502,6 +486,7 @@ namespace OpenTK_Project
                 BufferAccessMask.MapPersistentBit |
                 BufferAccessMask.MapCoherentBit);
 
+
             string screenVertexShaderSource = ShaderControls.GetScreenVertexShaderSource();
 
             string screenFragmentShaderSource = ShaderControls.GetScreenFragmentShaderSource();
@@ -543,45 +528,7 @@ namespace OpenTK_Project
             GL.DeleteShader(screenVertexShaderHandle);
             GL.DeleteShader(screenFragmentShaderHandle);
         }
-        List<VertexPositionColor> ConvertRectangleToVertices(Rectangle rectangle)
-        {
-            List<VertexPositionColor> vertices = new();
-            // face 1
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
-                rectangle.Color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Position.Z),
-                rectangle.Color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                rectangle.Color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Length + rectangle.Position.X, rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                rectangle.Color));
-
-            // face 2
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Position.Z),
-                rectangle.Color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Position.Z),
-                rectangle.Color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Position.X, rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                rectangle.Color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(rectangle.Position.X, rectangle.Width + rectangle.Position.Y, rectangle.Height + rectangle.Position.Z),
-                rectangle.Color));
-            return vertices;
-        }
-        List<int> GetRectangleIndices(int verticesCount)
+        List<int> GetRectangtyufgjleIndices(int verticesCount)
         {
             int[] rectangleIndices = {
                 0,1,2,  2,3,0,
@@ -603,11 +550,16 @@ namespace OpenTK_Project
             return indices;
         }
         // instead of going through all rectangles, have either a grid based indexing system where each area or chunk has "dirty", where if something is dirty there, only undirty there.
+        // like have a list of 1000 chunks where each chunk has a list of 1000 objects aswell as a "dirty" property. Then for each dirty chunk, find the dirty object
         // return an array of meshes. Then run drawelements in a loop for each mesh
-        void UpdateRectangles()
+        // rectangles are currently being converted to meshes. But all are still rectangles, even with mesh. This would change later
+
+        // Updates all objects (including camera) and returns amount of indices
+        int UpdateRectangles()
         {
-            bool anyDirty = false;
             List<VertexPositionColor> vertices = [];
+            List<int> indices = [];
+            int vertexOffset = 0;
             // convert to foreach mesh and add indices per iteration
             for (int i = 0; i < rectangles!.Count; i++ )
             {
@@ -615,20 +567,15 @@ namespace OpenTK_Project
                 {
                     rectangles[i] = selectedRectangle!;
                 }
-                if (rectangles[i].Dirty)
-                {
-                    anyDirty = true;
-                }
-                vertices.AddRange(ConvertRectangleToVertices(rectangles[i]));
-            }
-            if (!anyDirty)
-            {
-                return;
-            }
-            Console.WriteLine("updating");
 
-            List<int> indices = GetRectangleIndices(vertices.Count());
-            indicesCount = indices.Count();
+                vertices.AddRange(rectangles[i].Mesh.Vertices);
+
+                foreach (int index in rectangles[i].Mesh.Indices )
+                {
+                    indices.Add(index + vertexOffset);
+                }
+                vertexOffset += rectangles[i].Mesh.Vertices.Count();
+            }
 
             // using vertexbuffer to send data to GPU
             int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
@@ -636,7 +583,7 @@ namespace OpenTK_Project
             GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
 
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, indicesCount * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
 
@@ -655,6 +602,60 @@ namespace OpenTK_Project
             GL.UniformMatrix4(modelLocation, false, ref model);
 
             GL.Uniform3(cameraPosLocation, camera.Position);
+            return indices.Count();
+        }
+        // maybe convert so it can be made from a rectangle
+        public static Mesh CreateRectangleMesh(Vector3 position, float width, float length, float height, Color4 color)
+        {
+            Mesh mesh = new Mesh();
+            List<VertexPositionColor> vertices = new();
+            // face 1
+            vertices.Add(new VertexPositionColor(
+                new Vector3(width + position.X, position.Y, position.Z),
+                color));
+
+            vertices.Add(new VertexPositionColor(
+                new Vector3(width + position.X, length + position.Y, position.Z),
+                color));
+
+            vertices.Add(new VertexPositionColor(
+                new Vector3(width + position.X, length + position.Y, height + position.Z),
+                color));
+
+            vertices.Add(new VertexPositionColor(
+                new Vector3(width + position.X, position.Y, height + position.Z),
+                color));
+
+            // face 2
+            vertices.Add(new VertexPositionColor(
+                new Vector3(position.X, length + position.Y, position.Z),
+                color));
+
+            vertices.Add(new VertexPositionColor(
+                new Vector3(position.X, position.Y, position.Z),
+                color));
+
+            vertices.Add(new VertexPositionColor(
+                new Vector3(position.X, position.Y, height + position.Z),
+                color));
+
+            vertices.Add(new VertexPositionColor(
+                new Vector3(position.X, length + position.Y, height + position.Z),
+                color));
+
+            int[] indices = {
+                0,1,2,  2,3,0,
+                1,4,7,  7,2,1,
+                4,5,6,  6,7,4,
+                5,0,3,  3,6,5,
+                1,0,5,  5,4,1,
+                3,2,7,  3,7,6
+            };
+
+            mesh.Vertices = vertices.ToArray();
+            mesh.Indices = indices;
+
+            return mesh;
         }
         public void CameraCollidesWithRectangle(Vector3 proposedPosition, float velocity)
         {

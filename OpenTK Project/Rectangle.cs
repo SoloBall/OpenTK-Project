@@ -10,6 +10,7 @@ namespace OpenTK_Project
         public Color4 Color;
         public bool Selected;
         public bool Dirty;
+        public Mesh Mesh;
 
         public Rectangle(int length, int height, int width, Vector3? position = null, Color4? color = null, bool selected = false, bool dirty = true )
         {
