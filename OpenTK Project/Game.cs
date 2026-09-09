@@ -201,7 +201,7 @@ namespace OpenTK_Project
                 selectedRectangle.Dirty = true;
             }
         }
-        void CreateGrid(int size = 25, int spread = 5 )
+        void CreateGrid(int size = 5, int spread = 5 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -602,10 +602,13 @@ namespace OpenTK_Project
             }
             return indices;
         }
+        // instead of going through all rectangles, have either a grid based indexing system where each area or chunk has "dirty", where if something is dirty there, only undirty there.
+        // return an array of meshes. Then run drawelements in a loop for each mesh
         void UpdateRectangles()
         {
             bool anyDirty = false;
             List<VertexPositionColor> vertices = [];
+            // convert to foreach mesh and add indices per iteration
             for (int i = 0; i < rectangles!.Count; i++ )
             {
                 if (rectangles[i].Selected)
@@ -633,7 +636,7 @@ namespace OpenTK_Project
             GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
 
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, indicesCount * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
 
