@@ -209,7 +209,7 @@ namespace OpenTK_Project
                 {
                     for ( float z = 0; z < size; z += spread )
                     {
-                        Rectangle point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Z + z, camera.Position.Y + y), new(x / size, z / size, y / size, 1));
+                        Rectangle point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1));
                         rectangles!.Add(point);
                     }
                 }
