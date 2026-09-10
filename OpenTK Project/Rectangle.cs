@@ -3,6 +3,8 @@ using OpenTK.Mathematics;
 
 namespace OpenTK_Project
 {
+    //add GetVertices() => it takes the meshes vertices and adds rectangle position
+    //make rectangle into object at some point maybe
     public class Rectangle
     {
         public int Length, Width, Height;
