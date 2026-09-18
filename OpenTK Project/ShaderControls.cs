@@ -32,7 +32,6 @@ namespace OpenTK_Project
             ";
             return source;
         }
-        // make colors fun
         public static string GetFragmentShaderSource( )
         {
             string source =

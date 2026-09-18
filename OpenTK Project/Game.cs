@@ -36,7 +36,7 @@ namespace OpenTK_Project
         private Rectangle? selectedRectangle;
         private int rectangleStructSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
 
-        public Game(int width = 1280, int height = 768, string title = "Base Window") : base(GameWindowSettings.Default,
+        public Game(int width = 1920, int height = 1080, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
                 Title = title,
@@ -63,8 +63,8 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            Rectangle plane = new(50, 1, 50, camera.Position - Vector3.UnitZ * 5);
-            plane.Mesh = CreateRectangleMesh(plane.Position, plane.Width, plane.Length, plane.Height, plane.Color);
+            Rectangle plane = new(4, 4, 4, camera.Position - Vector3.UnitZ * 5);
+            plane.Mesh = GrabMeshFromModels(plane.Color, plane.Position, "../../../Assets/Models/cube.obj", 4);
             objects.Add(plane);
             GenerateBuffers();
 
@@ -122,13 +122,13 @@ namespace OpenTK_Project
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
                 Rectangle rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
-                rectangle.Mesh = CreateRectangleMesh(rectangle.Position, rectangle.Width, rectangle.Length, rectangle.Height, randomColor);
+                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj");
                 //rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj", 1);
                 objects!.Add(rectangle);
             }
             if ( MouseState.IsButtonPressed(MouseButton.Middle) )
             {
-                Rectangle rectangle = new(3, 3, 3, camera.Position + camera.Front * 3, new Color4(1, 1, 1, 1));
+                Rectangle rectangle = new(3, 3, 3, camera.Position + camera.Front * 3, Color4.Yellow);
                 rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, scale: 0.5f);
                 objects!.Add(rectangle);
             }
@@ -209,7 +209,7 @@ namespace OpenTK_Project
                 objects[objects.Count()-1].Position = newPosition;
             }
         }
-        void CreateGrid(int size = 25, int spread = 5 )
+        void CreateGrid(int size = 20, int spread = 5 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -218,7 +218,7 @@ namespace OpenTK_Project
                     for ( float z = 0; z < size; z += spread )
                     {
                         Rectangle point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1));
-                        point.Mesh = CreateRectangleMesh(point.Position, point.Width, point.Length, point.Height, point.Color);
+                        point.Mesh = GrabMeshFromModels(point.Color, point.Position, "../../../Assets/Models/cube.obj");
                         objects!.Add(point);
                     }
                 }
@@ -317,17 +317,18 @@ namespace OpenTK_Project
             List<VertexPositionColor> vertices = [];
             List<int> indices = [];
             int vertexOffset = 0;
-            // convert to foreach mesh and add indices per iteration
-            for ( int i = 0; i < objects!.Count; i++ )
+            for (int i = 0; i < objects!.Count; i++ )
             {
-                if ( objects[i].Selected )
+                if (objects[i].Selected)
                 {
                     objects[i] = selectedRectangle!;
                 }
+                foreach (var vertex in objects[i].Mesh.Vertices )
+                {
+                    vertices.Add(new VertexPositionColor(vertex.Position + objects[i].Position, vertex.Color));
+                }
 
-                vertices.AddRange(objects[i].Mesh.Vertices);
-
-                foreach ( int index in objects[i].Mesh.Indices )
+                foreach (int index in objects[i].Mesh.Indices )
                 {
                     indices.Add(index + vertexOffset);
                 }
@@ -534,26 +535,6 @@ namespace OpenTK_Project
             GL.DeleteShader(screenFragmentShaderHandle);
         }
 
-        //remove when done debugging
-        static int consoleAnchor = -1;
-
-        void PrintObjectPositions( )
-        {
-            if ( consoleAnchor == -1 )
-            {
-                Console.CursorVisible = false;
-                consoleAnchor = Console.CursorTop;
-            }
-
-            Console.SetCursorPosition(0, consoleAnchor);
-
-            foreach ( var obj in objects )
-            {
-                var p = obj.Position;
-                string line = $"Pos: ({p.X:F2}, {p.Y:F2}, {p.Z:F2})";
-                Console.WriteLine(line.PadRight(Console.WindowWidth - 1));
-            }
-        }
         // instead of going through all rectangles, have either a grid based indexing system where each area or chunk has "dirty", where if something is dirty there, only undirty there.
         // like have a list of 1000 chunks where each chunk has a list of 1000 objects aswell as a "dirty" property. Then for each dirty chunk, find the dirty object
 
@@ -561,7 +542,6 @@ namespace OpenTK_Project
         // object position cannot be changed because mesh vertices are not connected to object position.
         int UpdateRectangles()
         {
-            PrintObjectPositions();
             List<VertexPositionColor> vertices = [];
             List<int> indices = [];
             int vertexOffset = 0;
@@ -575,7 +555,6 @@ namespace OpenTK_Project
                 {
                     vertices.Add(new VertexPositionColor(vertex.Position + objects[i].Position, vertex.Color));
                 }
-                vertices.AddRange(objects[i].Mesh.Vertices);
 
                 foreach (int index in objects[i].Mesh.Indices )
                 {
@@ -612,61 +591,9 @@ namespace OpenTK_Project
             return indices.Count();
         }
         // maybe convert so it can be made from a rectangle
-        public static Mesh CreateRectangleMesh(Vector3 position, float width, float length, float height, Color4 color)
-        {
-            Mesh mesh = new Mesh();
-            List<VertexPositionColor> vertices = new();
-            // face 1
-            vertices.Add(new VertexPositionColor(
-                new Vector3(width + position.X, position.Y, position.Z),
-                color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(width + position.X, length + position.Y, position.Z),
-                color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(width + position.X, length + position.Y, height + position.Z),
-                color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(width + position.X, position.Y, height + position.Z),
-                color));
-
-            // face 2
-            vertices.Add(new VertexPositionColor(
-                new Vector3(position.X, length + position.Y, position.Z),
-                color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(position.X, position.Y, position.Z),
-                color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(position.X, position.Y, height + position.Z),
-                color));
-
-            vertices.Add(new VertexPositionColor(
-                new Vector3(position.X, length + position.Y, height + position.Z),
-                color));
-
-            int[] indices = {
-                0,1,2,  2,3,0,
-                1,4,7,  7,2,1,
-                4,5,6,  6,7,4,
-                5,0,3,  3,6,5,
-                1,0,5,  5,4,1,
-                3,2,7,  3,7,6
-            };
-
-            mesh.Vertices = vertices.ToArray();
-            mesh.Indices = indices;
-
-            return mesh;
-        }
         public static Mesh GrabMeshFromModels( Color4 color, Vector3 position, string path = "../../../Assets/Models/Entity/cow.obj", float scale = 1)
         {
-            var (vertices, indices) = ObjLoader.Load(path, color, position, scale);
+            var (vertices, indices) = ObjLoader.Load(path, color, scale);
             Mesh mesh = new();
             mesh.Vertices = vertices;
             mesh.Indices = indices;
