@@ -1,40 +1,37 @@
-﻿using OpenTK;
+﻿using OpenTK.Compute.OpenCL;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using System.Collections.Generic;
-using System.Drawing;
+using System.ComponentModel.Design;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+// in shaders: make quad size equal to some function of triangle size
 namespace OpenTK_Project
 {
     public class Game : GameWindow
     {
         private int VertexBufferHandle;
         private int ShaderProgramHandle;
-        private int PostProgramHandle;
+        private int OutlineShaderProgramHandle;
         private int VertexArrayHandle;
         private int IndexBufferHandle;
-        private int DepthTexture;
-        private int SceneTexture;
-        private int FrameBufferHandle;
-        private int quadVertexArrayHandle;
-        private int shaderStorageBufferHandle;
+        private int AdjacentIndexBufferHandle;
+        private int AdjacentVertexArrayHandle;
 
-        private IntPtr MappedPtr;
-        
         private Camera? camera;
         private float deltaTime;
         private Vector2 lastMousePos;
         private bool isFirstMouse;
 
+        private bool Wireframe = false;
+
         private Random? rand;
 
         private List<Rectangle>? objects;
         private Rectangle? selectedRectangle;
-        private int rectangleStructSize = Marshal.SizeOf<InstanceStructs.RectangleInstance>();
 
         public Game(int width = 1920, int height = 1080, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
@@ -63,8 +60,8 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            Rectangle plane = new(4, 4, 4, camera.Position - Vector3.UnitZ * 5);
-            plane.Mesh = GrabMeshFromModels(plane.Color, plane.Position, "../../../Assets/Models/cube.obj", 4);
+            Rectangle plane = new(40, 40, 40, camera.Position - Vector3.UnitZ * 5);
+            plane.Mesh = GrabMeshFromModels(plane.Color, plane.Position, "../../../Assets/Models/cube.obj", 40);
             objects.Add(plane);
             GenerateBuffers();
 
@@ -117,6 +114,21 @@ namespace OpenTK_Project
             if ( keyboardInput.IsKeyPressed(Keys.X) )
             {
                 objects!.Clear();
+            }
+            if ( keyboardInput.IsKeyPressed(Keys.K) )
+            {
+                if ( !Wireframe )
+                {
+                    GL.Disable(EnableCap.DepthTest);
+                    GL.DepthMask(false);
+                    Wireframe = true;
+                }
+                else
+                {
+                    GL.Enable(EnableCap.DepthTest);
+                    GL.DepthMask(true);
+                    Wireframe = false;
+                }
             }
             if (MouseState.IsButtonPressed(MouseButton.Left))
             {
@@ -209,7 +221,7 @@ namespace OpenTK_Project
                 objects[objects.Count()-1].Position = newPosition;
             }
         }
-        void CreateGrid(int size = 20, int spread = 5 )
+        void CreateGrid(int size = 24, int spread = 8 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -224,68 +236,7 @@ namespace OpenTK_Project
                 }
             }
         }
-        protected override void OnRenderFrame(FrameEventArgs args)
-        {
-            int indicesCount = UpdateRectangles();
-
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
-            GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            GL.UseProgram(ShaderProgramHandle);
-            GL.BindVertexArray(VertexArrayHandle);
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-
-            Matrix4 view = camera!.GetMatrix();
-            int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
-            GL.UniformMatrix4(viewLocation, false, ref view);
-
-            int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
-            GL.Uniform3(cameraPosLocation, ref camera.Position);
-
-            GL.DrawElements(PrimitiveType.Triangles, indicesCount, DrawElementsType.UnsignedInt, 0);
-
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
-            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            GL.Disable(EnableCap.DepthTest);
-            GL.DepthMask(false);
-            GL.UseProgram(PostProgramHandle);
-
-            GL.ActiveTexture(TextureUnit.Texture0);
-            GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
-            int depthTextureLocation = GL.GetUniformLocation(PostProgramHandle, "depthTexture");
-            GL.Uniform1(depthTextureLocation, 0);
-
-            Vector2 screenSize = new Vector2(ClientSize.X, ClientSize.Y);
-            int screenSizeLocation = GL.GetUniformLocation(PostProgramHandle, "screenSize");
-            GL.Uniform2(screenSizeLocation, ref screenSize);
-
-            int outlineColorLocaiton = GL.GetUniformLocation(PostProgramHandle, "outlineColor");
-            Vector3 outlineColor = new Vector3(0.2f, 1f, 1f);
-            GL.Uniform3(outlineColorLocaiton, outlineColor);
-
-            GL.ActiveTexture(TextureUnit.Texture0);
-            GL.BindTexture(TextureTarget.Texture2D, SceneTexture);
-            int sceneTextureLocation = GL.GetUniformLocation(PostProgramHandle, "sceneTexture");
-            GL.Uniform1(sceneTextureLocation, 0);
-
-            int nearPlaneLocation = GL.GetUniformLocation(PostProgramHandle, "nearPlane");
-            GL.Uniform1(nearPlaneLocation, camera.near);
-
-            int farPlaneLocation = GL.GetUniformLocation(PostProgramHandle, "farPlane");
-            GL.Uniform1(farPlaneLocation, camera.far);
-
-            GL.BindVertexArray(quadVertexArrayHandle);
-            GL.DrawArraysInstanced(PrimitiveType.Triangles, 0, 6, objects.Count);
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            GL.Enable(EnableCap.DepthTest);
-            GL.DepthMask(true);
-
-            this.Context.SwapBuffers();
-            base.OnRenderFrame(args);
-        }
+        // add outline pass and remove old uniforms
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
             // loop through each rectangle, if it's in between camera.position and camera.position + camera.front * 20, select it, select only the closest
@@ -314,8 +265,10 @@ namespace OpenTK_Project
 
         void GenerateBuffers( )
         {
+            GL.Enable(EnableCap.DepthTest);
+            GL.DepthMask(true);
             List<VertexPositionColor> vertices = [];
-            List<int> indices = [];
+            List<uint> indices = [];
             int vertexOffset = 0;
             for (int i = 0; i < objects!.Count; i++ )
             {
@@ -330,11 +283,11 @@ namespace OpenTK_Project
 
                 foreach (int index in objects[i].Mesh.Indices )
                 {
-                    indices.Add(index + vertexOffset);
+                    indices.Add((uint)( index + vertexOffset ));
                 }
                 vertexOffset += objects[i].Mesh.Vertices.Count();
             }
-
+            uint[] adjacentIndices = AdjacencyMeshBuilder.BuildAdjacencyIndices(indices.ToArray());
             // using vertexbuffer to send data to GPU
             int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
 
@@ -358,6 +311,11 @@ namespace OpenTK_Project
             GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 
+            AdjacentIndexBufferHandle = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferHandle);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, adjacentIndices.Count() * sizeof(int), adjacentIndices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+
             VertexArrayHandle = GL.GenVertexArray();
             GL.BindVertexArray(VertexArrayHandle);
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
@@ -371,59 +329,17 @@ namespace OpenTK_Project
             GL.EnableVertexAttribArray(vertexPositionColorAttrib0.Index);
             GL.EnableVertexAttribArray(vertexPositionColorAttrib1.Index);
 
+            GL.BindVertexArray(0);
 
-            DepthTexture = GL.GenTexture();
-            GL.BindTexture(TextureTarget.Texture2D, DepthTexture);
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.DepthComponent32, this.ClientSize.X, this.ClientSize.Y, 0, PixelFormat.DepthComponent, PixelType.Float, IntPtr.Zero);
+            AdjacentVertexArrayHandle = GL.GenVertexArray();
+            GL.BindVertexArray(AdjacentVertexArrayHandle);
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
 
-            FrameBufferHandle = GL.GenFramebuffer();
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, FrameBufferHandle);
-            GL.DrawBuffer(DrawBufferMode.ColorAttachment0);
-            GL.ReadBuffer(ReadBufferMode.ColorAttachment0);
-            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, DepthTexture, 0);
+            GL.VertexAttribPointer(vertexPositionColorAttrib0.Index, vertexPositionColorAttrib0.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib0.Offset);
+            GL.VertexAttribPointer(vertexPositionColorAttrib1.Index, vertexPositionColorAttrib1.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib1.Offset);
 
-            GL.CreateTextures(TextureTarget.Texture2D, 1, out SceneTexture);
-            GL.BindTexture(TextureTarget.Texture2D, SceneTexture);
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, ClientSize.X, ClientSize.Y, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
-
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureCompareMode, (int)All.None);
-
-            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, SceneTexture, 0);
-
-
-            var status = GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
-            if (status != FramebufferErrorCode.FramebufferComplete )
-            {
-                Console.WriteLine($"FBO not complete: {status}");
-            }
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-
-
-            float[] quadVerts = {
-                // positions (clip space)
-                -1f, -1f,
-                 1f, -1f,
-                 1f,  1f,
-
-                -1f, -1f,
-                 1f,  1f,
-                -1f,  1f    
-            };
-
-            quadVertexArrayHandle = GL.GenVertexArray();
-            int quadVertexBufferHandle = GL.GenBuffer();
-
-            GL.BindVertexArray(quadVertexArrayHandle);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, quadVertexBufferHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, quadVerts.Length * sizeof(float), quadVerts, BufferUsageHint.StaticDraw);
-
-            // vPosition is location = 0 in the post-process vertex shader
-            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), 0);
-            GL.EnableVertexAttribArray(0);
+            GL.EnableVertexAttribArray(vertexPositionColorAttrib0.Index);
+            GL.EnableVertexAttribArray(vertexPositionColorAttrib1.Index);
 
             GL.BindVertexArray(0);
 
@@ -469,100 +385,92 @@ namespace OpenTK_Project
             GL.DeleteShader(vertexShaderHandle);
             GL.DeleteShader(fragmentShaderHandle);
 
-            GL.UseProgram(ShaderProgramHandle);
 
-            shaderStorageBufferHandle = GL.GenBuffer();
-            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, shaderStorageBufferHandle);
-            int maxInstances = 5000;
-
-            GL.BufferStorage(BufferTarget.ShaderStorageBuffer,
-                maxInstances * rectangleStructSize,
-                IntPtr.Zero,
-                BufferStorageFlags.MapWriteBit |
-                BufferStorageFlags.MapPersistentBit |
-                BufferStorageFlags.MapCoherentBit);
+            // outline pass shaders
             
-            GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, shaderStorageBufferHandle);
+            string outlineVertexShaderSource = ShaderControls.GetOutlineVertexShaderSource();
+            int outlineVertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
+            GL.ShaderSource(outlineVertexShaderHandle, outlineVertexShaderSource);
+            GL.CompileShader(outlineVertexShaderHandle);
 
-            MappedPtr = GL.MapBufferRange(
-                BufferTarget.ShaderStorageBuffer,
-                IntPtr.Zero,
-                maxInstances * rectangleStructSize,
-                BufferAccessMask.MapWriteBit |
-                BufferAccessMask.MapPersistentBit |
-                BufferAccessMask.MapCoherentBit);
-
-
-            string screenVertexShaderSource = ShaderControls.GetScreenVertexShaderSource();
-
-            string screenFragmentShaderSource = ShaderControls.GetScreenFragmentShaderSource();
-
-            int screenVertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
-            GL.ShaderSource(screenVertexShaderHandle, screenVertexShaderSource);
-            GL.CompileShader(screenVertexShaderHandle);
-
-            string screenVertexShaderInfo = GL.GetShaderInfoLog(screenVertexShaderHandle);
-            if ( screenVertexShaderInfo != string.Empty )
+            string outlineVertexShaderInfo = GL.GetShaderInfoLog(outlineVertexShaderHandle);
+            if ( outlineVertexShaderInfo != string.Empty )
             {
-                Console.WriteLine("Error during compilation of screen vertex shader: " + screenVertexShaderInfo);
+                Console.WriteLine("Error during compilation of outline vertex shader: " + outlineVertexShaderInfo);
             }
 
-            int screenFragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
-            GL.ShaderSource(screenFragmentShaderHandle, screenFragmentShaderSource);
-            GL.CompileShader(screenFragmentShaderHandle);
+            string outlineGeometryShaderSource = ShaderControls.GetOutlineGeometryShaderSource();
+            int outlineGeometryShaderHandle = GL.CreateShader(ShaderType.GeometryShader);
+            GL.ShaderSource(outlineGeometryShaderHandle, outlineGeometryShaderSource);
+            GL.CompileShader(outlineGeometryShaderHandle);
 
-            string screenFragmentShaderInfo = GL.GetShaderInfoLog(screenFragmentShaderHandle);
-            if ( screenFragmentShaderInfo != string.Empty )
+            string outlineGeometryShaderInfo = GL.GetShaderInfoLog(outlineGeometryShaderHandle);
+            if ( outlineGeometryShaderInfo != string.Empty )
             {
-                Console.WriteLine("Error during compilation of screen fragment shader: " + screenFragmentShaderInfo);
+                Console.WriteLine("Error during compilation of outline geometry shader: " + outlineGeometryShaderInfo);
             }
 
-            if ( PostProgramHandle != 0 )
+            string outlineFragmentShaderSource = ShaderControls.GetOutlineFragmentShaderSource();
+            int outlineFragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
+            GL.ShaderSource(outlineFragmentShaderHandle, outlineFragmentShaderSource);
+            GL.CompileShader(outlineFragmentShaderHandle);
+
+            string outlineFragmentShaderInfo = GL.GetShaderInfoLog(outlineFragmentShaderHandle);
+            if ( outlineFragmentShaderInfo != string.Empty )
             {
-                GL.DeleteProgram(PostProgramHandle);
+                Console.WriteLine("Error during compilation of outline fragment shader: " + outlineFragmentShaderInfo);
             }
-            PostProgramHandle = GL.CreateProgram();
 
-            GL.AttachShader(PostProgramHandle, screenVertexShaderHandle);
-            GL.AttachShader(PostProgramHandle, screenFragmentShaderHandle);
+            if ( OutlineShaderProgramHandle != 0 )
+            {
+                GL.DeleteProgram(OutlineShaderProgramHandle);
+            }
+            OutlineShaderProgramHandle = GL.CreateProgram();
 
-            GL.LinkProgram(PostProgramHandle);
+            GL.AttachShader(OutlineShaderProgramHandle, outlineVertexShaderHandle);
+            GL.AttachShader(OutlineShaderProgramHandle, outlineGeometryShaderHandle);
+            GL.AttachShader(OutlineShaderProgramHandle, outlineFragmentShaderHandle);
 
-            GL.DetachShader(PostProgramHandle, screenVertexShaderHandle);
-            GL.DetachShader(PostProgramHandle, screenFragmentShaderHandle);
+            GL.LinkProgram(OutlineShaderProgramHandle);
 
-            GL.DeleteShader(screenVertexShaderHandle);
-            GL.DeleteShader(screenFragmentShaderHandle);
+            GL.DetachShader(OutlineShaderProgramHandle, outlineVertexShaderHandle);
+            GL.DetachShader(OutlineShaderProgramHandle, outlineGeometryShaderHandle);
+            GL.DetachShader(OutlineShaderProgramHandle, outlineFragmentShaderHandle);
+
+            GL.DeleteShader(outlineVertexShaderHandle);
+            GL.DeleteShader(outlineGeometryShaderHandle);
+            GL.DeleteShader(outlineFragmentShaderHandle);
         }
 
         // instead of going through all rectangles, have either a grid based indexing system where each area or chunk has "dirty", where if something is dirty there, only undirty there.
         // like have a list of 1000 chunks where each chunk has a list of 1000 objects aswell as a "dirty" property. Then for each dirty chunk, find the dirty object
 
         // Updates all objects (including camera) and returns amount of indices
-        // object position cannot be changed because mesh vertices are not connected to object position.
-        int UpdateRectangles()
+
+        // update so outline pass also works
+        protected override void OnRenderFrame(FrameEventArgs args)
         {
+            GL.UseProgram(ShaderProgramHandle);
             List<VertexPositionColor> vertices = [];
-            List<int> indices = [];
+            List<uint> indices = [];
             int vertexOffset = 0;
-            for (int i = 0; i < objects!.Count; i++ )
+            for ( int i = 0; i < objects!.Count; i++ )
             {
-                if (objects[i].Selected)
+                if ( objects[i].Selected )
                 {
                     objects[i] = selectedRectangle!;
                 }
-                foreach (var vertex in objects[i].Mesh.Vertices )
+                foreach ( var vertex in objects[i].Mesh.Vertices )
                 {
                     vertices.Add(new VertexPositionColor(vertex.Position + objects[i].Position, vertex.Color));
                 }
 
-                foreach (int index in objects[i].Mesh.Indices )
+                foreach ( int index in objects[i].Mesh.Indices )
                 {
-                    indices.Add(index + vertexOffset);
+                    indices.Add((uint)( index + vertexOffset ));
                 }
                 vertexOffset += objects[i].Mesh.Vertices.Count();
             }
-
             // using vertexbuffer to send data to GPU
             int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
@@ -577,19 +485,72 @@ namespace OpenTK_Project
             Matrix4 view = camera!.GetMatrix();
             Matrix4 model = Matrix4.Identity;
 
-            int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
 
             int projectionLocation = GL.GetUniformLocation(ShaderProgramHandle, "projection");
             int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
             int modelLocation = GL.GetUniformLocation(ShaderProgramHandle, "model");
+
+            int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
 
             GL.UniformMatrix4(projectionLocation, false, ref projection);
             GL.UniformMatrix4(viewLocation, false, ref view);
             GL.UniformMatrix4(modelLocation, false, ref model);
 
             GL.Uniform3(cameraPosLocation, camera.Position);
-            return indices.Count();
+
+            GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
+            GL.BindVertexArray(VertexArrayHandle);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
+            
+            GL.DrawElements(PrimitiveType.Triangles, indices.Count, DrawElementsType.UnsignedInt, 0);
+
+
+            // outline pass
+            
+            GL.UseProgram(OutlineShaderProgramHandle);
+
+            uint[] adjacencedIndices = AdjacencyMeshBuilder.BuildAdjacencyIndices(indices.ToArray());
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
+            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
+
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferHandle);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, adjacencedIndices.Count() * sizeof(int), adjacencedIndices.ToArray(), BufferUsageHint.DynamicDraw);
+
+            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
+
+            int outlinerojectionLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uProjection");
+            int outlineViewLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uView");
+            int outlineModelLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uModel");
+
+            int edgeThicknessLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uEdgeThickness");
+            int creaseCosThresholdLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uCreaseCosThreshold");
+
+            int outlineColorLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uOutlineColor");
+
+            GL.UniformMatrix4(outlinerojectionLocation, false, ref projection);
+            GL.UniformMatrix4(outlineViewLocation, false, ref view);
+            GL.UniformMatrix4(outlineModelLocation, false, ref model);
+
+            GL.Uniform1(edgeThicknessLocation, 0.008f); // adjust
+            GL.Uniform1(creaseCosThresholdLocation, 89f); // minimum degrees
+
+            GL.Uniform3(outlineColorLocation, new Vector3(0.2f, 0.2f, 0.2f));
+
+
+            GL.BindVertexArray(AdjacentVertexArrayHandle);
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferHandle);
+            if ( Wireframe )
+            {
+                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            }
+            GL.DrawElements(PrimitiveType.TrianglesAdjacency, adjacencedIndices.Count(), DrawElementsType.UnsignedInt, 0);
+
+            this.Context.SwapBuffers();
+            base.OnRenderFrame(args);
         }
+        
         // maybe convert so it can be made from a rectangle
         public static Mesh GrabMeshFromModels( Color4 color, Vector3 position, string path = "../../../Assets/Models/Entity/cow.obj", float scale = 1)
         {
@@ -656,17 +617,13 @@ namespace OpenTK_Project
         {
             GL.BindVertexArray(0);
             GL.DeleteVertexArray(VertexArrayHandle);
-            GL.DeleteVertexArray(quadVertexArrayHandle);
 
 
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
             GL.DeleteBuffer(VertexBufferHandle);
             GL.DeleteBuffer(IndexBufferHandle);
-            GL.DeleteBuffer(FrameBufferHandle);
 
             GL.BindTexture(TextureTarget.Texture2D, 0);
-            GL.DeleteTexture(SceneTexture);
-            GL.DeleteTexture(DepthTexture);
 
             GL.UseProgram(0);
             GL.DeleteProgram(ShaderProgramHandle);
