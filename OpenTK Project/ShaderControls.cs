@@ -45,13 +45,12 @@ namespace OpenTK_Project
             out vec4 color;
 
             void main(){
-                float lightRadius = 40;
+                float lightRadius = 400;
                 float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
-                if (darkFactor < 0.1) {
-                    darkFactor = 0.1;
+                if (darkFactor > 0.9) {
+                    darkFactor = 0.9;
                 }
                 vec4 darkFragColor = fColor * (1 - darkFactor);
-                color = (floor(darkFragColor * 16) / 16);
                 color = darkFragColor;
             }
             ";
@@ -140,7 +139,7 @@ namespace OpenTK_Project
 
                 // Edge (p0, p2), neighbor triangle formed with p1
                 vec3 n1 = faceNormal(p0, p1, p2);
-                bool crease1 = dot(mainN, n1) < uCreaseCosThreshold;
+                bool crease1 = acos(dot(mainN, n1)/(length(mainN)*length(n1))) > uCreaseCosThreshold;
 
                 // delete silhouette if edges are too big, or at least change it so it doesn't use sign, as there are edge cases where it'd fuck up
                 bool silhouette1 = sign(dot(mainN, -p0)) != sign(dot(n1, -p0));
@@ -148,13 +147,13 @@ namespace OpenTK_Project
 
                 // Edge (p2, p4), neighbor triangle formed with p3
                 vec3 n2 = faceNormal(p2, p3, p4);
-                bool crease2 = dot(mainN, n2) < uCreaseCosThreshold;
+                bool crease2 = acos(dot(mainN, n2)) > uCreaseCosThreshold;
                 bool silhouette2 = sign(dot(mainN, -p2)) != sign(dot(n2, -p2));
                 if (crease2 || silhouette2) emitEdgeQuad(p2, p4);
 
                 // Edge (p4, p0), neighbor triangle formed with p5
                 vec3 n3 = faceNormal(p4, p5, p0);
-                bool crease3 = dot(mainN, n3) < uCreaseCosThreshold;
+                bool crease3 = acos(dot(mainN, n3)) > uCreaseCosThreshold;
                 bool silhouette3 = sign(dot(mainN, -p4)) != sign(dot(n3, -p4));
                 if (crease3 || silhouette3) emitEdgeQuad(p4, p0);
             }

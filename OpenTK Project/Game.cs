@@ -60,9 +60,24 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            Rectangle plane = new(40, 40, 40, camera.Position - Vector3.UnitZ * 5);
-            plane.Mesh = GrabMeshFromModels(plane.Color, plane.Position, "../../../Assets/Models/cube.obj", 40);
-            objects.Add(plane);
+            for (int i = -5; i < 5; i++)
+            {
+                for (int j = -2; j < 2; j++ )
+                {
+                    Rectangle plane = new(10, 1000, 10, camera.Position + new Vector3(i*100, j*100, 1) - Vector3.UnitZ * 1010);
+                    plane.Mesh = GrabMeshFromModels(plane.Color, plane.Position, "../../../Assets/Models/cube.obj", 10, 10, 1000);
+                    objects.Add(plane);
+                    for (int k = 20; k < plane.Height; k++ )
+                    {
+                        if (k%20 == 0 )
+                        {
+                            Rectangle ring = new(12, 1, 12, plane.Position + Vector3.UnitZ * k);
+                            ring.Mesh = GrabMeshFromModels(Color4.Red, ring.Position, "../../../Assets/Models/cube.obj", 12, 12, 1);
+                            objects.Add(ring);
+                        }
+                    }
+                }
+            }
             GenerateBuffers();
 
             base.OnLoad();
@@ -77,6 +92,10 @@ namespace OpenTK_Project
             var keyboardInput = KeyboardState;
             var mouseInput = MouseState;
             Vector3 proposedPosition = camera.Position;
+            if ( keyboardInput.IsKeyDown(Keys.LeftShift) )
+            {
+                velocity *= 4;
+            }
             if (keyboardInput.IsKeyDown(Keys.W))
             {
                 proposedPosition += camera.Front * velocity;
@@ -141,7 +160,7 @@ namespace OpenTK_Project
             if ( MouseState.IsButtonPressed(MouseButton.Middle) )
             {
                 Rectangle rectangle = new(3, 3, 3, camera.Position + camera.Front * 3, Color4.Yellow);
-                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, scale: 0.5f);
+                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position);
                 objects!.Add(rectangle);
             }
             if ( MouseState.IsButtonPressed(MouseButton.Right) )
@@ -533,8 +552,8 @@ namespace OpenTK_Project
             GL.UniformMatrix4(outlineViewLocation, false, ref view);
             GL.UniformMatrix4(outlineModelLocation, false, ref model);
 
-            GL.Uniform1(edgeThicknessLocation, 0.008f); // adjust
-            GL.Uniform1(creaseCosThresholdLocation, 89f); // minimum degrees
+            GL.Uniform1(edgeThicknessLocation, 0.01f); // adjust
+            GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(30f)); // minimum degrees
 
             GL.Uniform3(outlineColorLocation, new Vector3(0.2f, 0.2f, 0.2f));
 
@@ -552,9 +571,9 @@ namespace OpenTK_Project
         }
         
         // maybe convert so it can be made from a rectangle
-        public static Mesh GrabMeshFromModels( Color4 color, Vector3 position, string path = "../../../Assets/Models/Entity/cow.obj", float scale = 1)
+        public static Mesh GrabMeshFromModels( Color4 color, Vector3 position, string path = "../../../Assets/Models/Entity/cow.obj", float scaleX = 1, float scaleY = 1, float scaleZ = 1)
         {
-            var (vertices, indices) = ObjLoader.Load(path, color, scale);
+            var (vertices, indices) = ObjLoader.Load(path, color, scaleX, scaleY, scaleZ);
             Mesh mesh = new();
             mesh.Vertices = vertices;
             mesh.Indices = indices;

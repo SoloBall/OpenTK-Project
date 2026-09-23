@@ -16,7 +16,7 @@ namespace OpenTK_Project
         public float Pitch = 0;
 
         public float near = 0.1f;
-        public float far = 100f;
+        public float far = 10000f;
 
         public float speed = 5f;
         public float sensitivity = 0.1f;
