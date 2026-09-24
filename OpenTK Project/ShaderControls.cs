@@ -111,7 +111,14 @@ namespace OpenTK_Project
                 vec3 edgeDir = normalize(p1 - p0);
                 // edgedir alone would work, but we need to cross it with the camera's viewdir to make sure the outline is relative to the camera's position too. Otherwise, it'd probably mimic a jpg or something
                 vec3 sideDir = normalize(cross(edgeDir, viewDir));
-                vec3 offset = sideDir * uEdgeThickness;
+                // calculate the smallest distance fromj edge vector to origin(camera) to get how big the offset should be
+                vec3 d = p1 - p0;
+                float denom = dot(d, d);
+                float t = denom > 1e-12 ? clamp(-dot(p0, d) / denom, 0.0, 1.0) : 0.0;
+                float distanceOffset = length(p0 + t * d);
+                
+
+                vec3 offset = sideDir * uEdgeThickness * distanceOffset;
 
                 // the following just makes a rectangle... offset is just half of the height, Take a line, put an amount of border on it (offset in one direction, offset in the other) and you get a thicker line.
                 // basically, p0 + offset is one corner and p1 - offset is the opposite corner
@@ -138,24 +145,30 @@ namespace OpenTK_Project
                 vec3 mainN = faceNormal(p0, p2, p4);
 
                 // Edge (p0, p2), neighbor triangle formed with p1
-                vec3 n1 = faceNormal(p0, p1, p2);
-                bool crease1 = acos(dot(mainN, n1)/(length(mainN)*length(n1))) > uCreaseCosThreshold;
+                if (length(-(p0 + p2)) < 1000 || length(-p0) < 1000 || length(-p2) < 1000) {
+                    vec3 n1 = faceNormal(p0, p1, p2);
+                    bool crease1 = acos(dot(mainN, n1)/(length(mainN)*length(n1))) > uCreaseCosThreshold;
 
-                // delete silhouette if edges are too big, or at least change it so it doesn't use sign, as there are edge cases where it'd fuck up
-                bool silhouette1 = sign(dot(mainN, -p0)) != sign(dot(n1, -p0));
-                if (crease1 || silhouette1) emitEdgeQuad(p0, p2);
+                    // delete silhouette if edges are too big, or at least change it so it doesn't use sign, as there are edge cases where it'd fuck up
+                    bool silhouette1 = sign(dot(mainN, -p0)) != sign(dot(n1, -p0));
+                    if (crease1 || silhouette1) emitEdgeQuad(p0, p2);
+                }
 
                 // Edge (p2, p4), neighbor triangle formed with p3
-                vec3 n2 = faceNormal(p2, p3, p4);
-                bool crease2 = acos(dot(mainN, n2)) > uCreaseCosThreshold;
-                bool silhouette2 = sign(dot(mainN, -p2)) != sign(dot(n2, -p2));
-                if (crease2 || silhouette2) emitEdgeQuad(p2, p4);
+                if (length(-(p2 + p4)) < 1000 || length(-p2) < 1000 || length(-p4) < 1000) {
+                    vec3 n2 = faceNormal(p2, p3, p4);
+                    bool crease2 = acos(dot(mainN, n2)) > uCreaseCosThreshold;
+                    bool silhouette2 = sign(dot(mainN, -p2)) != sign(dot(n2, -p2));
+                    if (crease2 || silhouette2) emitEdgeQuad(p2, p4);
+                }
 
                 // Edge (p4, p0), neighbor triangle formed with p5
-                vec3 n3 = faceNormal(p4, p5, p0);
-                bool crease3 = acos(dot(mainN, n3)) > uCreaseCosThreshold;
-                bool silhouette3 = sign(dot(mainN, -p4)) != sign(dot(n3, -p4));
-                if (crease3 || silhouette3) emitEdgeQuad(p4, p0);
+                if (length(-(p4 + p0)) < 1000 || length(-p4) < 1000 || length(-p0) < 1000) {
+                    vec3 n3 = faceNormal(p4, p5, p0);
+                    bool crease3 = acos(dot(mainN, n3)) > uCreaseCosThreshold;
+                    bool silhouette3 = sign(dot(mainN, -p4)) != sign(dot(n3, -p4));
+                    if (crease3 || silhouette3) emitEdgeQuad(p4, p0);
+                }
             }
 ";
             return source;

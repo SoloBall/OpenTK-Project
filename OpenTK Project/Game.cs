@@ -60,24 +60,8 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            for (int i = -5; i < 5; i++)
-            {
-                for (int j = -2; j < 2; j++ )
-                {
-                    Rectangle plane = new(10, 1000, 10, camera.Position + new Vector3(i*100, j*100, 1) - Vector3.UnitZ * 1010);
-                    plane.Mesh = GrabMeshFromModels(plane.Color, plane.Position, "../../../Assets/Models/cube.obj", 10, 10, 1000);
-                    objects.Add(plane);
-                    for (int k = 20; k < plane.Height; k++ )
-                    {
-                        if (k%20 == 0 )
-                        {
-                            Rectangle ring = new(12, 1, 12, plane.Position + Vector3.UnitZ * k);
-                            ring.Mesh = GrabMeshFromModels(Color4.Red, ring.Position, "../../../Assets/Models/cube.obj", 12, 12, 1);
-                            objects.Add(ring);
-                        }
-                    }
-                }
-            }
+            Mapper.LoadCube(objects, camera.Position);
+            //Mapper.LoadSilentHill(objects, camera.Position);
             GenerateBuffers();
 
             base.OnLoad();
@@ -133,6 +117,13 @@ namespace OpenTK_Project
             if ( keyboardInput.IsKeyPressed(Keys.X) )
             {
                 objects!.Clear();
+            }
+            if ( keyboardInput.IsKeyPressed(Keys.Y) )
+            {
+                Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
+                Rectangle rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
+                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/sphere.obj");
+                objects!.Add(rectangle);
             }
             if ( keyboardInput.IsKeyPressed(Keys.K) )
             {
@@ -552,8 +543,8 @@ namespace OpenTK_Project
             GL.UniformMatrix4(outlineViewLocation, false, ref view);
             GL.UniformMatrix4(outlineModelLocation, false, ref model);
 
-            GL.Uniform1(edgeThicknessLocation, 0.01f); // adjust
-            GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(30f)); // minimum degrees
+            GL.Uniform1(edgeThicknessLocation, 0.002f);
+            GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(30f));
 
             GL.Uniform3(outlineColorLocation, new Vector3(0.2f, 0.2f, 0.2f));
 
