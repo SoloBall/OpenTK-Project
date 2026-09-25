@@ -1,26 +1,13 @@
-﻿using OpenTK.Compute.OpenCL;
-using OpenTK.Graphics.OpenGL;
+﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using System.ComponentModel.Design;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 
-// in shaders: make quad size equal to some function of triangle size
 namespace OpenTK_Project
 {
     public class Game : GameWindow
     {
-        private int VertexBufferHandle;
-        private int ShaderProgramHandle;
-        private int OutlineShaderProgramHandle;
-        private int VertexArrayHandle;
-        private int IndexBufferHandle;
-        private int AdjacentIndexBufferHandle;
-        private int AdjacentVertexArrayHandle;
-
         private Camera? camera;
         private float deltaTime;
         private Vector2 lastMousePos;
@@ -30,8 +17,8 @@ namespace OpenTK_Project
 
         private Random? rand;
 
-        private List<Rectangle>? objects;
-        private Rectangle? selectedRectangle;
+        private List<SceneObject>? objects;
+        private SceneObject? selectedRectangle;
 
         public Game(int width = 1920, int height = 1080, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
@@ -56,13 +43,13 @@ namespace OpenTK_Project
 
             objects = new();
 
-            camera = new();
+            camera = new(ClientSize);
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
             Mapper.LoadCube(objects, camera.Position);
             //Mapper.LoadSilentHill(objects, camera.Position);
-            GenerateBuffers();
+
 
             base.OnLoad();
         }
@@ -121,7 +108,7 @@ namespace OpenTK_Project
             if ( keyboardInput.IsKeyPressed(Keys.Y) )
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
-                Rectangle rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
+                SceneObject rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
                 rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/sphere.obj");
                 objects!.Add(rectangle);
             }
@@ -143,14 +130,14 @@ namespace OpenTK_Project
             if (MouseState.IsButtonPressed(MouseButton.Left))
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
-                Rectangle rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
+                SceneObject rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
                 rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj");
                 //rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj", 1);
                 objects!.Add(rectangle);
             }
             if ( MouseState.IsButtonPressed(MouseButton.Middle) )
             {
-                Rectangle rectangle = new(3, 3, 3, camera.Position + camera.Front * 3, Color4.Yellow);
+                SceneObject rectangle = new(3, 3, 3, camera.Position + camera.Front * 3, Color4.Yellow);
                 rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position);
                 objects!.Add(rectangle);
             }
@@ -165,7 +152,7 @@ namespace OpenTK_Project
                         {
                             if (Vector3.Distance(camera.Position, selectedRectangle.Position) > Vector3.Distance(camera.Position, objects[i].Position) )
                             {
-                                foreach (Rectangle rectangle in objects )
+                                foreach (SceneObject rectangle in objects )
                                 {
                                     if (rectangle == selectedRectangle )
                                     {
@@ -191,7 +178,7 @@ namespace OpenTK_Project
             {
                 if ( keyboardInput.IsKeyPressed(Keys.Q) )
                 {
-                    foreach (Rectangle rectangle in objects! )
+                    foreach (SceneObject rectangle in objects! )
                     {
                         if (rectangle == selectedRectangle )
                         {
@@ -208,10 +195,9 @@ namespace OpenTK_Project
             {
                 Vector3 oldPosition = camera.Position;
                 camera.Position = camera.Position - oldPosition;
-                foreach (Rectangle rectangle in objects! )
+                foreach (SceneObject obj in objects! )
                 {
-                    rectangle.Dirty = true;
-                    rectangle.Position = rectangle.Position - oldPosition;
+                    obj.Position = obj.Position - oldPosition;
                 }
             }
         }
@@ -227,11 +213,10 @@ namespace OpenTK_Project
                 Vector3 newPosition = Vector3.Lerp(selectedRectangle.Position, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
 
                 selectedRectangle.Position = newPosition;
-                selectedRectangle.Dirty = true;
                 objects[objects.Count()-1].Position = newPosition;
             }
         }
-        void CreateGrid(int size = 24, int spread = 8 )
+        void CreateGrid(int size = 50, int spread = 5 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -239,8 +224,8 @@ namespace OpenTK_Project
                 {
                     for ( float z = 0; z < size; z += spread )
                     {
-                        Rectangle point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1));
-                        point.Mesh = GrabMeshFromModels(point.Color, point.Position, "../../../Assets/Models/cube.obj");
+                        SceneObject point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1));
+                        point.Mesh = GrabMeshFromModels(point.Color, point.Position, "../../../Assets/Models/Entity/cow.obj");
                         objects!.Add(point);
                     }
                 }
@@ -273,185 +258,6 @@ namespace OpenTK_Project
             base.OnResize(e);
         }
 
-        void GenerateBuffers( )
-        {
-            GL.Enable(EnableCap.DepthTest);
-            GL.DepthMask(true);
-            List<VertexPositionColor> vertices = [];
-            List<uint> indices = [];
-            int vertexOffset = 0;
-            for (int i = 0; i < objects!.Count; i++ )
-            {
-                if (objects[i].Selected)
-                {
-                    objects[i] = selectedRectangle!;
-                }
-                foreach (var vertex in objects[i].Mesh.Vertices )
-                {
-                    vertices.Add(new VertexPositionColor(vertex.Position + objects[i].Position, vertex.Color));
-                }
-
-                foreach (int index in objects[i].Mesh.Indices )
-                {
-                    indices.Add((uint)( index + vertexOffset ));
-                }
-                vertexOffset += objects[i].Mesh.Vertices.Count();
-            }
-            uint[] adjacentIndices = AdjacencyMeshBuilder.BuildAdjacencyIndices(indices.ToArray());
-            // using vertexbuffer to send data to GPU
-            int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
-
-            if ( VertexBufferHandle != 0 )
-            {
-                GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-                GL.BindVertexArray(0);
-                GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
-                GL.DeleteBuffer(VertexBufferHandle);
-                GL.DeleteBuffer(IndexBufferHandle);
-                GL.DeleteVertexArray(VertexArrayHandle);
-                VertexBufferHandle = IndexBufferHandle = VertexArrayHandle = 0;
-            }
-            VertexBufferHandle = GL.GenBuffer();
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-
-            IndexBufferHandle = GL.GenBuffer();
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
-
-            AdjacentIndexBufferHandle = GL.GenBuffer();
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferHandle);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, adjacentIndices.Count() * sizeof(int), adjacentIndices.ToArray(), BufferUsageHint.DynamicDraw);
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
-
-            VertexArrayHandle = GL.GenVertexArray();
-            GL.BindVertexArray(VertexArrayHandle);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-
-            VertexAttribute vertexPositionColorAttrib0 = VertexPositionColor.VertexInfo.Attributes[0]; // try and take this value, use it as location later on.
-            VertexAttribute vertexPositionColorAttrib1 = VertexPositionColor.VertexInfo.Attributes[1];
-
-            GL.VertexAttribPointer(vertexPositionColorAttrib0.Index, vertexPositionColorAttrib0.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib0.Offset);
-            GL.VertexAttribPointer(vertexPositionColorAttrib1.Index, vertexPositionColorAttrib1.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib1.Offset);
-
-            GL.EnableVertexAttribArray(vertexPositionColorAttrib0.Index);
-            GL.EnableVertexAttribArray(vertexPositionColorAttrib1.Index);
-
-            GL.BindVertexArray(0);
-
-            AdjacentVertexArrayHandle = GL.GenVertexArray();
-            GL.BindVertexArray(AdjacentVertexArrayHandle);
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-
-            GL.VertexAttribPointer(vertexPositionColorAttrib0.Index, vertexPositionColorAttrib0.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib0.Offset);
-            GL.VertexAttribPointer(vertexPositionColorAttrib1.Index, vertexPositionColorAttrib1.Count, VertexAttribPointerType.Float, false, 7 * sizeof(float), vertexPositionColorAttrib1.Offset);
-
-            GL.EnableVertexAttribArray(vertexPositionColorAttrib0.Index);
-            GL.EnableVertexAttribArray(vertexPositionColorAttrib1.Index);
-
-            GL.BindVertexArray(0);
-
-
-            string vertexShaderSource = ShaderControls.GetVertexShaderSource();
-
-            string fragmentShaderSource = ShaderControls.GetFragmentShaderSource();
-
-            int vertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
-            GL.ShaderSource(vertexShaderHandle, vertexShaderSource);
-            GL.CompileShader(vertexShaderHandle);
-
-            string vertexShaderInfo = GL.GetShaderInfoLog(vertexShaderHandle);
-            if ( vertexShaderInfo != string.Empty )
-            {
-                Console.WriteLine("Error during compilation of vertex shader: " + vertexShaderInfo);
-            }
-
-            int fragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
-            GL.ShaderSource(fragmentShaderHandle, fragmentShaderSource);
-            GL.CompileShader(fragmentShaderHandle);
-
-            string fragmentShaderInfo = GL.GetShaderInfoLog(fragmentShaderHandle);
-            if ( fragmentShaderInfo != string.Empty )
-            {
-                Console.WriteLine("Error during compilation of fragment shader: " + fragmentShaderInfo);
-            }
-
-            if ( ShaderProgramHandle != 0 )
-            {
-                GL.DeleteProgram(ShaderProgramHandle);
-            }
-            ShaderProgramHandle = GL.CreateProgram();
-
-            GL.AttachShader(ShaderProgramHandle, vertexShaderHandle);
-            GL.AttachShader(ShaderProgramHandle, fragmentShaderHandle);
-
-            GL.LinkProgram(ShaderProgramHandle);
-
-            GL.DetachShader(ShaderProgramHandle, vertexShaderHandle);
-            GL.DetachShader(ShaderProgramHandle, fragmentShaderHandle);
-
-            GL.DeleteShader(vertexShaderHandle);
-            GL.DeleteShader(fragmentShaderHandle);
-
-
-            // outline pass shaders
-            
-            string outlineVertexShaderSource = ShaderControls.GetOutlineVertexShaderSource();
-            int outlineVertexShaderHandle = GL.CreateShader(ShaderType.VertexShader);
-            GL.ShaderSource(outlineVertexShaderHandle, outlineVertexShaderSource);
-            GL.CompileShader(outlineVertexShaderHandle);
-
-            string outlineVertexShaderInfo = GL.GetShaderInfoLog(outlineVertexShaderHandle);
-            if ( outlineVertexShaderInfo != string.Empty )
-            {
-                Console.WriteLine("Error during compilation of outline vertex shader: " + outlineVertexShaderInfo);
-            }
-
-            string outlineGeometryShaderSource = ShaderControls.GetOutlineGeometryShaderSource();
-            int outlineGeometryShaderHandle = GL.CreateShader(ShaderType.GeometryShader);
-            GL.ShaderSource(outlineGeometryShaderHandle, outlineGeometryShaderSource);
-            GL.CompileShader(outlineGeometryShaderHandle);
-
-            string outlineGeometryShaderInfo = GL.GetShaderInfoLog(outlineGeometryShaderHandle);
-            if ( outlineGeometryShaderInfo != string.Empty )
-            {
-                Console.WriteLine("Error during compilation of outline geometry shader: " + outlineGeometryShaderInfo);
-            }
-
-            string outlineFragmentShaderSource = ShaderControls.GetOutlineFragmentShaderSource();
-            int outlineFragmentShaderHandle = GL.CreateShader(ShaderType.FragmentShader);
-            GL.ShaderSource(outlineFragmentShaderHandle, outlineFragmentShaderSource);
-            GL.CompileShader(outlineFragmentShaderHandle);
-
-            string outlineFragmentShaderInfo = GL.GetShaderInfoLog(outlineFragmentShaderHandle);
-            if ( outlineFragmentShaderInfo != string.Empty )
-            {
-                Console.WriteLine("Error during compilation of outline fragment shader: " + outlineFragmentShaderInfo);
-            }
-
-            if ( OutlineShaderProgramHandle != 0 )
-            {
-                GL.DeleteProgram(OutlineShaderProgramHandle);
-            }
-            OutlineShaderProgramHandle = GL.CreateProgram();
-
-            GL.AttachShader(OutlineShaderProgramHandle, outlineVertexShaderHandle);
-            GL.AttachShader(OutlineShaderProgramHandle, outlineGeometryShaderHandle);
-            GL.AttachShader(OutlineShaderProgramHandle, outlineFragmentShaderHandle);
-
-            GL.LinkProgram(OutlineShaderProgramHandle);
-
-            GL.DetachShader(OutlineShaderProgramHandle, outlineVertexShaderHandle);
-            GL.DetachShader(OutlineShaderProgramHandle, outlineGeometryShaderHandle);
-            GL.DetachShader(OutlineShaderProgramHandle, outlineFragmentShaderHandle);
-
-            GL.DeleteShader(outlineVertexShaderHandle);
-            GL.DeleteShader(outlineGeometryShaderHandle);
-            GL.DeleteShader(outlineFragmentShaderHandle);
-        }
-
         // instead of going through all rectangles, have either a grid based indexing system where each area or chunk has "dirty", where if something is dirty there, only undirty there.
         // like have a list of 1000 chunks where each chunk has a list of 1000 objects aswell as a "dirty" property. Then for each dirty chunk, find the dirty object
 
@@ -460,8 +266,8 @@ namespace OpenTK_Project
         // update so outline pass also works
         protected override void OnRenderFrame(FrameEventArgs args)
         {
-            GL.UseProgram(ShaderProgramHandle);
-            List<VertexPositionColor> vertices = [];
+            // for drawing in bulk
+            /*List<VertexPositionColor> vertices = [];
             List<uint> indices = [];
             int vertexOffset = 0;
             for ( int i = 0; i < objects!.Count; i++ )
@@ -480,106 +286,35 @@ namespace OpenTK_Project
                     indices.Add((uint)( index + vertexOffset ));
                 }
                 vertexOffset += objects[i].Mesh.Vertices.Count();
-            }
+            }*/
             // using vertexbuffer to send data to GPU
-            int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
-
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Count() * sizeof(int), indices.ToArray(), BufferUsageHint.DynamicDraw);
-
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-
-            Matrix4 projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), ClientSize.X / ClientSize.Y, camera!.near, camera.far);
-            Matrix4 view = camera!.GetMatrix();
-            Matrix4 model = Matrix4.Identity;
-
-
-            int projectionLocation = GL.GetUniformLocation(ShaderProgramHandle, "projection");
-            int viewLocation = GL.GetUniformLocation(ShaderProgramHandle, "view");
-            int modelLocation = GL.GetUniformLocation(ShaderProgramHandle, "model");
-
-            int cameraPosLocation = GL.GetUniformLocation(ShaderProgramHandle, "cameraPos");
-
-            GL.UniformMatrix4(projectionLocation, false, ref projection);
-            GL.UniformMatrix4(viewLocation, false, ref view);
-            GL.UniformMatrix4(modelLocation, false, ref model);
-
-            GL.Uniform3(cameraPosLocation, camera.Position);
-
             GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-            GL.BindVertexArray(VertexArrayHandle);
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferHandle);
-            
-            GL.DrawElements(PrimitiveType.Triangles, indices.Count, DrawElementsType.UnsignedInt, 0);
-
-
-            // outline pass
-            
-            GL.UseProgram(OutlineShaderProgramHandle);
-
-            uint[] adjacencedIndices = AdjacencyMeshBuilder.BuildAdjacencyIndices(indices.ToArray());
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-            GL.BufferData(BufferTarget.ArrayBuffer, vertices.Count() * sizeInBytes, vertices.ToArray(), BufferUsageHint.DynamicDraw);
-
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferHandle);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, adjacencedIndices.Count() * sizeof(int), adjacencedIndices.ToArray(), BufferUsageHint.DynamicDraw);
-
-            GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferHandle);
-
-            int outlinerojectionLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uProjection");
-            int outlineViewLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uView");
-            int outlineModelLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uModel");
-
-            int edgeThicknessLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uEdgeThickness");
-            int creaseCosThresholdLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uCreaseCosThreshold");
-
-            int outlineColorLocation = GL.GetUniformLocation(OutlineShaderProgramHandle, "uOutlineColor");
-
-            GL.UniformMatrix4(outlinerojectionLocation, false, ref projection);
-            GL.UniformMatrix4(outlineViewLocation, false, ref view);
-            GL.UniformMatrix4(outlineModelLocation, false, ref model);
-
-            GL.Uniform1(edgeThicknessLocation, 0.002f);
-            GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(30f));
-
-            GL.Uniform3(outlineColorLocation, new Vector3(0.2f, 0.2f, 0.2f));
-
-
-            GL.BindVertexArray(AdjacentVertexArrayHandle);
-            GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferHandle);
-            if ( Wireframe )
+            foreach (SceneObject obj in objects )
             {
-                GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+                obj.Mesh.Render(ClientSize, camera, Wireframe, obj.Dirty);
             }
-            GL.DrawElements(PrimitiveType.TrianglesAdjacency, adjacencedIndices.Count(), DrawElementsType.UnsignedInt, 0);
 
             this.Context.SwapBuffers();
             base.OnRenderFrame(args);
         }
         
-        // maybe convert so it can be made from a rectangle
         public static Mesh GrabMeshFromModels( Color4 color, Vector3 position, string path = "../../../Assets/Models/Entity/cow.obj", float scaleX = 1, float scaleY = 1, float scaleZ = 1)
         {
-            var (vertices, indices) = ObjLoader.Load(path, color, scaleX, scaleY, scaleZ);
-            Mesh mesh = new();
-            mesh.Vertices = vertices;
-            mesh.Indices = indices;
+            var (vertices, indices) = ObjLoader.Load(path, color, position, scaleX, scaleY, scaleZ);
+            Mesh mesh = new(vertices, indices);
             return mesh;
         }
         public void CameraCollidesWithRectangle(Vector3 proposedPosition, float velocity)
         {
             float radius = 1f;
-            foreach (Rectangle rectangle in objects!) 
+            foreach (SceneObject rectangle in objects!) 
             {
                 if (rectangle.Position == Vector3.Zero) continue; // check for whether it's close enough for optimization
                 if (rectangle.CollidesWithSphere(proposedPosition, radius)) //WIP
                 {
                     Vector3 min = rectangle.Position;
-                    Vector3 max = rectangle.Position + new Vector3(rectangle.Length, rectangle.Width, rectangle.Height);
+                    Vector3 max = rectangle.Position + new Vector3(rectangle.ScaleX, rectangle.ScaleZ, rectangle.ScaleY);
                     float distToLeft = Math.Abs(camera!.Position.X - min.X);
                     float distToRight = Math.Abs(camera.Position.X - max.X);
                     float distToBack = Math.Abs(camera.Position.Z - min.Z);
@@ -626,19 +361,10 @@ namespace OpenTK_Project
         protected override void OnUnload() // garbage collection
         {
             GL.BindVertexArray(0);
-            GL.DeleteVertexArray(VertexArrayHandle);
-
-
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-            GL.DeleteBuffer(VertexBufferHandle);
-            GL.DeleteBuffer(IndexBufferHandle);
-
             GL.BindTexture(TextureTarget.Texture2D, 0);
 
             GL.UseProgram(0);
-            GL.DeleteProgram(ShaderProgramHandle);
-            GL.DeleteProgram(ShaderProgramHandle);
-
             base.OnUnload();
         }
     }

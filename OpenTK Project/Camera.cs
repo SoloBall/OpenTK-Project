@@ -21,6 +21,12 @@ namespace OpenTK_Project
         public float speed = 5f;
         public float sensitivity = 0.1f;
 
+        public Matrix4 projection;
+        public Camera(Vector2i ClientSize)
+        {
+            projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), ClientSize.X / ClientSize.Y, near, far);
+        }
+
         public void UpdateDirection()
         {
             float yawRads = MathHelper.DegreesToRadians(Yaw);
@@ -36,11 +42,11 @@ namespace OpenTK_Project
         }
 
         // proposed position is calculating from min, change to interprit the entirety of the rectangle
-        public bool IsLookingAtRectangle(Rectangle rectangle)
+        public bool IsLookingAtRectangle(SceneObject rectangle)
         {
             Vector3 proposedRectanglePosition = Position + Vector3.Distance(rectangle.Position, Position) * Front;
             Vector3 min = rectangle.Position;
-            Vector3 max = min + new Vector3(rectangle.Length, rectangle.Width, rectangle.Height);
+            Vector3 max = min + new Vector3(rectangle.ScaleX, rectangle.ScaleZ, rectangle.ScaleY);
 
             if (proposedRectanglePosition.X > min.X && proposedRectanglePosition.X < max.X )
             {

@@ -10,7 +10,7 @@ namespace OpenTK_Project
 {
     public static class ObjLoader
     {
-        public static (VertexPositionColor[] vertices, int[] indices) Load( string path, Color4 color, float scaleX = 1, float scaleY = 1, float scaleZ = 1 )
+        public static (VertexPositionColor[] vertices, uint[] indices) Load( string path, Color4 color, Vector3 worldSpacePosition, float scaleX = 1, float scaleY = 1, float scaleZ = 1 )
         {
             var positions = new List<Vector3>();
             var indices = new List<int>();
@@ -54,10 +54,14 @@ namespace OpenTK_Project
             var vertices = new VertexPositionColor[positions.Count];
             for ( int i = 0; i < positions.Count; i++ )
             {
-                vertices[i] = new VertexPositionColor((positions[i] * new Vector3(scaleX, scaleY, scaleZ)), color);
+                vertices[i] = new VertexPositionColor(positions[i] * new Vector3(scaleX, scaleY, scaleZ) + worldSpacePosition, color);
             }
-
-            return (vertices, indices.ToArray());
+            uint[] uintIndices = new uint[indices.Count];
+            for (int i = 0; i < indices.Count; i++ )
+            {
+                uintIndices[i] = (uint)indices[i];
+            }
+            return (vertices, uintIndices);
         }
     }
 }
