@@ -27,7 +27,7 @@ namespace OpenTK_Project
             void main() {
                 fColor = vColor;
                 gl_Position = projection * view * model * vec4(vPosition, 1.0);
-                fPos = vPosition;
+                fPos = vec4(model * vec4(vPosition, 1.0)).xyz;
             }
             ";
             return source;
@@ -90,11 +90,13 @@ namespace OpenTK_Project
 
             in vec3 vViewPos[6];
 
-            // ""clip space"" -> real 3d space with distance. It's distorted to look more 3d ish but it fucks math up
+            // ""clip space"" -> takes in 2d, outputs clip-space, which is the gpu version of 3d. It just makes the gpu know to make far things smaller and close things bigger
             uniform mat4 uProjection;
 
             uniform float uEdgeThickness;     // in view-space units, tune per scene scale
             uniform float uCreaseCosThreshold; // e.g. cos(35 degrees) ~= 0.82; lower = more sensitive
+
+            uniform bool lazer;
 
             vec3 faceNormal(vec3 a, vec3 b, vec3 c)
             {

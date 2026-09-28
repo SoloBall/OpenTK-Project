@@ -1,23 +1,34 @@
 ﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace OpenTK_Project
 {
     // add garbage collection
-    // parse position into vertex shader
-    // parse outline color to outline fragment shader
+    // add scale to shaders instead
     public class Mesh
     {
-        private int VertexBufferObject, VertexArrayObject, AdjacentVertexArrayObject, IndexBufferObject, AdjacentIndexBufferObject, BasicShader, OutlineShader;
+        private readonly int VertexBufferObject, VertexArrayObject, AdjacentVertexArrayObject, IndexBufferObject, AdjacentIndexBufferObject, BasicShader, OutlineShader;
         public VertexPositionColor[] Vertices { get; set; }
         public uint[] Indices { get; set; }
-        private uint[] AdjacentIndices;
-        private int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
+        public Vector3 LocalOrigin { get; set; }
+        public Vector3 Scale { get; set; }
+        public Quaternion Orientation { get; set; }
+        private readonly uint[] AdjacentIndices;
+        private readonly int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
+        private Matrix4 Model =>
+                Matrix4.CreateScale(Scale) *
+                Matrix4.CreateFromQuaternion(Orientation) *
+                Matrix4.CreateTranslation(LocalOrigin);
 
-        public Mesh( VertexPositionColor[] vertices, uint[] indices)
+
+        public Mesh( VertexPositionColor[] vertices, uint[] indices, Vector3 localOrigin, Vector3 scale)
         {
             Vertices = vertices;
             Indices = indices;
+            LocalOrigin = localOrigin;
+            Orientation = Quaternion.Identity;
+            Scale = scale;
             AdjacentIndices = AdjacencyMeshBuilder.BuildAdjacencyIndices(Indices);
 
             if ( VertexBufferObject != 0 )
@@ -170,7 +181,7 @@ namespace OpenTK_Project
             GL.DeleteShader(outlineGeometryShaderHandle);
             GL.DeleteShader(outlineFragmentShaderHandle);
         }
-        public void Render(Vector2i ClientSize, Camera camera, bool wireframe = false, bool dirty = false )
+        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, bool wireframe = false, bool dirty = false, bool selected = false )
         {
             
             GL.UseProgram(BasicShader);
@@ -185,13 +196,11 @@ namespace OpenTK_Project
             }
 
             Matrix4 view = camera!.GetMatrix();
-            Matrix4 model = Matrix4.Identity;
-
+            Matrix4 model = Model;
 
             int projectionLocation = GL.GetUniformLocation(BasicShader, "projection");
             int viewLocation = GL.GetUniformLocation(BasicShader, "view");
             int modelLocation = GL.GetUniformLocation(BasicShader, "model");
-            int testLocation = GL.GetUniformLocation(BasicShader, "test");
 
             int cameraPosLocation = GL.GetUniformLocation(BasicShader, "cameraPos");
 
@@ -200,6 +209,7 @@ namespace OpenTK_Project
             GL.UniformMatrix4(modelLocation, false, ref model);
 
             GL.Uniform3(cameraPosLocation, camera.Position);
+
             GL.BindVertexArray(VertexArrayObject);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
 
@@ -240,12 +250,24 @@ namespace OpenTK_Project
             GL.Uniform1(edgeThicknessLocation, 0.002f);
             GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(30f));
 
-            GL.Uniform3(outlineColorLocation, new Vector3(0.2f, 0.2f, 0.2f));
-
+            if ( selected )
+            {
+                GL.Uniform3(outlineColorLocation, new Vector3(0f, 1f, 1f));
+            }
+            else
+            {
+                GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
+            }
 
             GL.BindVertexArray(AdjacentVertexArrayObject);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferObject);
             GL.DrawElements(PrimitiveType.TrianglesAdjacency, AdjacentIndices.Count(), DrawElementsType.UnsignedInt, 0);
+        }
+        public void Rotate(Vector3 axis, float angle )
+        {
+            float angleRadians = MathHelper.DegreesToRadians(angle);
+            var delta = Quaternion.FromAxisAngle(axis, angleRadians);
+            Orientation = Quaternion.Normalize(Orientation * delta);
         }
     }
 }

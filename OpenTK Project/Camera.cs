@@ -44,9 +44,9 @@ namespace OpenTK_Project
         // proposed position is calculating from min, change to interprit the entirety of the rectangle
         public bool IsLookingAtRectangle(SceneObject rectangle)
         {
-            Vector3 proposedRectanglePosition = Position + Vector3.Distance(rectangle.Position, Position) * Front;
-            Vector3 min = rectangle.Position;
-            Vector3 max = min + new Vector3(rectangle.ScaleX, rectangle.ScaleZ, rectangle.ScaleY);
+            Vector3 proposedRectanglePosition = Position + Vector3.Distance(rectangle.Mesh.LocalOrigin, Position) * Front;
+            Vector3 min = rectangle.Mesh.LocalOrigin;
+            Vector3 max = min + rectangle.Scale;
 
             if (proposedRectanglePosition.X > min.X && proposedRectanglePosition.X < max.X )
             {

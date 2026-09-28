@@ -47,7 +47,7 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            Mapper.LoadCube(objects, camera.Position);
+            Mapper.LoadCube(objects, camera.Position - Vector3.UnitZ * 1000);
             //Mapper.LoadSilentHill(objects, camera.Position);
 
 
@@ -108,8 +108,8 @@ namespace OpenTK_Project
             if ( keyboardInput.IsKeyPressed(Keys.Y) )
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
-                SceneObject rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
-                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/sphere.obj");
+                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor, modelURL: "Entity/fish");
+                rectangle.Mesh.Rotate(Vector3.UnitX, 90);
                 objects!.Add(rectangle);
             }
             if ( keyboardInput.IsKeyPressed(Keys.K) )
@@ -130,19 +130,21 @@ namespace OpenTK_Project
             if (MouseState.IsButtonPressed(MouseButton.Left))
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
-                SceneObject rectangle = new(1, 1, 1, camera.Position + camera.Front * 3, randomColor);
-                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj");
+                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor);
                 //rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj", 1);
                 objects!.Add(rectangle);
             }
             if ( MouseState.IsButtonPressed(MouseButton.Middle) )
             {
-                SceneObject rectangle = new(3, 3, 3, camera.Position + camera.Front * 3, Color4.Yellow);
-                rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position);
+                SceneObject rectangle = new(new Vector3(3, 3, 3), camera.Position + camera.Front * 3, Color4.Yellow, modelURL: "Entity/cow");
+                rectangle.Mesh.Rotate(Vector3.UnitX, 90);
                 objects!.Add(rectangle);
             }
             if ( MouseState.IsButtonPressed(MouseButton.Right) )
             {
+                // lazer
+                //SceneObject obj = new(new Vector3(0.2f, 10, 0.2f), camera.Position + camera.Front * 12 + camera.Up * 2, Color4.Red);
+                //objects!.Add(obj);
                 for ( int i = 0; i < objects!.Count; i++ )
                 {
                     if ( objects[i] != selectedRectangle && camera.IsLookingAtRectangle(objects[i]) )
@@ -150,7 +152,7 @@ namespace OpenTK_Project
                         Console.WriteLine("cube find: " + objects[i].Color.ToString());
                         if (selectedRectangle != null )
                         {
-                            if (Vector3.Distance(camera.Position, selectedRectangle.Position) > Vector3.Distance(camera.Position, objects[i].Position) )
+                            if (Vector3.Distance(camera.Position, selectedRectangle.Mesh.LocalOrigin) > Vector3.Distance(camera.Position, objects[i].Mesh.LocalOrigin) )
                             {
                                 foreach (SceneObject rectangle in objects )
                                 {
@@ -197,7 +199,7 @@ namespace OpenTK_Project
                 camera.Position = camera.Position - oldPosition;
                 foreach (SceneObject obj in objects! )
                 {
-                    obj.Position = obj.Position - oldPosition;
+                    obj.Mesh.LocalOrigin = obj.Mesh.LocalOrigin - oldPosition;
                 }
             }
         }
@@ -206,17 +208,17 @@ namespace OpenTK_Project
         {
             if (selectedRectangle != null )
             {
-                float distance = Vector3.Distance(camera!.Position, selectedRectangle!.Position);
+                float distance = Vector3.Distance(camera!.Position, selectedRectangle!.Mesh.LocalOrigin);
                 var scroll = MouseState.ScrollDelta.Y;
                 distance += scroll * 20 * (1 - deltaTime * 10);
                 distance = float.Clamp(distance, 1f, 40f);
-                Vector3 newPosition = Vector3.Lerp(selectedRectangle.Position, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
+                Vector3 newPosition = Vector3.Lerp(selectedRectangle.Mesh.LocalOrigin, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
 
-                selectedRectangle.Position = newPosition;
-                objects[objects.Count()-1].Position = newPosition;
+                selectedRectangle.Mesh.LocalOrigin = newPosition;
+                selectedRectangle.Mesh.Rotate(Vector3.UnitY, 50*deltaTime);
             }
         }
-        void CreateGrid(int size = 50, int spread = 5 )
+        void CreateGrid(int size = 15, int spread = 3 )
         {
             for ( float x = 0; x < size; x += spread )
             {
@@ -224,8 +226,8 @@ namespace OpenTK_Project
                 {
                     for ( float z = 0; z < size; z += spread )
                     {
-                        SceneObject point = new(1, 1, 1, (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1));
-                        point.Mesh = GrabMeshFromModels(point.Color, point.Position, "../../../Assets/Models/Entity/cow.obj");
+                        SceneObject point = new(new Vector3(1, 1, 1), (camera!.Position.X + x, camera.Position.Y + y, camera.Position.Z + z), new(x / size, z / size, y / size, 1), modelURL: "Entity/cow");
+                        point.Mesh.Rotate(Vector3.UnitX, 90);
                         objects!.Add(point);
                     }
                 }
@@ -292,29 +294,22 @@ namespace OpenTK_Project
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
             foreach (SceneObject obj in objects )
             {
-                obj.Mesh.Render(ClientSize, camera, Wireframe, obj.Dirty);
+                obj.Mesh.Render(ClientSize, camera, obj.Scale, Wireframe, obj.Dirty, obj.Selected);
             }
 
             this.Context.SwapBuffers();
             base.OnRenderFrame(args);
-        }
-        
-        public static Mesh GrabMeshFromModels( Color4 color, Vector3 position, string path = "../../../Assets/Models/Entity/cow.obj", float scaleX = 1, float scaleY = 1, float scaleZ = 1)
-        {
-            var (vertices, indices) = ObjLoader.Load(path, color, position, scaleX, scaleY, scaleZ);
-            Mesh mesh = new(vertices, indices);
-            return mesh;
         }
         public void CameraCollidesWithRectangle(Vector3 proposedPosition, float velocity)
         {
             float radius = 1f;
             foreach (SceneObject rectangle in objects!) 
             {
-                if (rectangle.Position == Vector3.Zero) continue; // check for whether it's close enough for optimization
+                if (rectangle.Mesh.LocalOrigin == Vector3.Zero) continue; // check for whether it's close enough for optimization
                 if (rectangle.CollidesWithSphere(proposedPosition, radius)) //WIP
                 {
-                    Vector3 min = rectangle.Position;
-                    Vector3 max = rectangle.Position + new Vector3(rectangle.ScaleX, rectangle.ScaleZ, rectangle.ScaleY);
+                    Vector3 min = rectangle.Mesh.LocalOrigin;
+                    Vector3 max = rectangle.Mesh.LocalOrigin + rectangle.Scale;
                     float distToLeft = Math.Abs(camera!.Position.X - min.X);
                     float distToRight = Math.Abs(camera.Position.X - max.X);
                     float distToBack = Math.Abs(camera.Position.Z - min.Z);
