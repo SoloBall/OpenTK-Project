@@ -47,8 +47,10 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            Mapper.LoadCube(objects, camera.Position - Vector3.UnitZ * 1000);
-            //Mapper.LoadSilentHill(objects, camera.Position);
+            //Mapper.LoadCube(objects, camera.Position - Vector3.UnitZ * 1000);
+            //objects.AddRange(Mapper.CreateSilentHill());
+            objects.AddRange(Mapper.CreateRectangle());
+            camera.Position += Vector3.UnitX * 10 + Vector3.UnitZ * 3;
 
 
             base.OnLoad();
@@ -210,6 +212,7 @@ namespace OpenTK_Project
             {
                 float distance = Vector3.Distance(camera!.Position, selectedRectangle!.Mesh.LocalOrigin);
                 var scroll = MouseState.ScrollDelta.Y;
+                AngleMinimum += scroll > 0 ? 1 : -1;
                 distance += scroll * 20 * (1 - deltaTime * 10);
                 distance = float.Clamp(distance, 1f, 40f);
                 Vector3 newPosition = Vector3.Lerp(selectedRectangle.Mesh.LocalOrigin, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);

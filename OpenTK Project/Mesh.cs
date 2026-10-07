@@ -1,6 +1,5 @@
 ﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Mathematics;
-using static System.Formats.Asn1.AsnWriter;
 
 namespace OpenTK_Project
 {
@@ -181,7 +180,7 @@ namespace OpenTK_Project
             GL.DeleteShader(outlineGeometryShaderHandle);
             GL.DeleteShader(outlineFragmentShaderHandle);
         }
-        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, bool wireframe = false, bool dirty = false, bool selected = false )
+        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, bool wireframe = false, bool dirty = false, bool selected = false)
         {
             
             GL.UseProgram(BasicShader);
