@@ -42,17 +42,17 @@ namespace OpenTK_Project
             }
             VertexBufferObject = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Count() * sizeInBytes, Vertices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Count() * sizeInBytes, Vertices.ToArray(), BufferUsageHint.StaticDraw);
             GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
             IndexBufferObject = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Count() * sizeof(int), Indices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Count() * sizeof(int), Indices.ToArray(), BufferUsageHint.StaticDraw);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 
             AdjacentIndexBufferObject = GL.GenBuffer();
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, AdjacentIndices.Count() * sizeof(int), AdjacentIndices.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, AdjacentIndices.Count() * sizeof(int), AdjacentIndices.ToArray(), BufferUsageHint.StaticDraw);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 
             VertexArrayObject = GL.GenVertexArray();
@@ -180,17 +180,17 @@ namespace OpenTK_Project
             GL.DeleteShader(outlineGeometryShaderHandle);
             GL.DeleteShader(outlineFragmentShaderHandle);
         }
-        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, bool wireframe = false, bool dirty = false, bool selected = false)
+        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, Vector3 sunDirection, int triangleOffset, bool wireframe = false, bool dirty = false, bool selected = false)
         {
             
             GL.UseProgram(BasicShader);
             if ( dirty ) 
             {
                 GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-                GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Count() * sizeInBytes, Vertices.ToArray(), BufferUsageHint.DynamicDraw);
+                GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Count() * sizeInBytes, Vertices.ToArray(), BufferUsageHint.StaticDraw);
 
                 GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
-                GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Count() * sizeof(int), Indices.ToArray(), BufferUsageHint.DynamicDraw);
+                GL.BufferData(BufferTarget.ElementArrayBuffer, Indices.Count() * sizeof(int), Indices.ToArray(), BufferUsageHint.StaticDraw);
                 GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             }
 
@@ -202,12 +202,16 @@ namespace OpenTK_Project
             int modelLocation = GL.GetUniformLocation(BasicShader, "model");
 
             int cameraPosLocation = GL.GetUniformLocation(BasicShader, "cameraPos");
+            int sunDirectionLocation = GL.GetUniformLocation(BasicShader, "sunDirection");
+            int triangleOffsetLocation = GL.GetUniformLocation(BasicShader, "triangleOffset");
 
             GL.UniformMatrix4(projectionLocation, false, ref camera.projection);
             GL.UniformMatrix4(viewLocation, false, ref view);
             GL.UniformMatrix4(modelLocation, false, ref model);
 
             GL.Uniform3(cameraPosLocation, camera.Position);
+            GL.Uniform3(sunDirectionLocation, sunDirection);
+            GL.Uniform1(triangleOffsetLocation, triangleOffset);
 
             GL.BindVertexArray(VertexArrayObject);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
@@ -225,10 +229,10 @@ namespace OpenTK_Project
             if ( dirty ) 
             {
                 GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
-                GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Count() * sizeInBytes, Vertices.ToArray(), BufferUsageHint.DynamicDraw);
+                GL.BufferData(BufferTarget.ArrayBuffer, Vertices.Count() * sizeInBytes, Vertices.ToArray(), BufferUsageHint.StaticDraw);
 
                 GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferObject);
-                GL.BufferData(BufferTarget.ElementArrayBuffer, AdjacentIndices.Count() * sizeof(int), AdjacentIndices.ToArray(), BufferUsageHint.DynamicDraw);
+                GL.BufferData(BufferTarget.ElementArrayBuffer, AdjacentIndices.Count() * sizeof(int), AdjacentIndices.ToArray(), BufferUsageHint.StaticDraw);
 
                 GL.BindBuffer(BufferTarget.ArrayBuffer, VertexBufferObject);
             }
@@ -246,8 +250,8 @@ namespace OpenTK_Project
             GL.UniformMatrix4(outlineViewLocation, false, ref view);
             GL.UniformMatrix4(outlineModelLocation, false, ref model);
 
-            GL.Uniform1(edgeThicknessLocation, 0.002f);
-            GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(30f));
+            GL.Uniform1(edgeThicknessLocation, 0.004f);
+            GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(35f));
 
             if ( selected )
             {
@@ -255,7 +259,7 @@ namespace OpenTK_Project
             }
             else
             {
-                GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
+                GL.Uniform3(outlineColorLocation, new Vector3(1f, 1f, 0f));
             }
 
             GL.BindVertexArray(AdjacentVertexArrayObject);

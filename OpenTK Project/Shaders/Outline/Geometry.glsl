@@ -19,7 +19,6 @@ vec3 faceNormal(vec3 a, vec3 b, vec3 c)
     return normalize(cross(b - a, c - a));
 }
 
-// might want to make edgethickness relative to distance, as line size is otherwise not(i think) relative
 void emitEdgeQuad(vec3 p0, vec3 p1)
 {
     // Build a small quad along the edge, facing roughly toward the camera,
@@ -29,7 +28,7 @@ void emitEdgeQuad(vec3 p0, vec3 p1)
     vec3 edgeDir = normalize(p1 - p0);
     // edgedir alone would work, but we need to cross it with the camera's viewdir to make sure the outline is relative to the camera's position too. Otherwise, it'd probably mimic a jpg or something
     vec3 sideDir = normalize(cross(edgeDir, viewDir));
-    // calculate the smallest distance fromj edge vector to origin(camera) to get how big the offset should be
+    // calculate the smallest distance from edge vector to origin(camera) to get how big the offset should be
     vec3 d = p1 - p0;
     float denom = dot(d, d);
     float t = denom > 1e-12 ? clamp(-dot(p0, d) / denom, 0.0, 1.0) : 0.0;
@@ -40,10 +39,17 @@ void emitEdgeQuad(vec3 p0, vec3 p1)
 
     // the following just makes a rectangle... offset is just half of the height, Take a line, put an amount of border on it (offset in one direction, offset in the other) and you get a thicker line.
     // basically, p0 + offset is one corner and p1 - offset is the opposite corner
-    gl_Position = uProjection * vec4(p0 + offset, 1.0); EmitVertex();
-    gl_Position = uProjection * vec4(p0 - offset, 1.0); EmitVertex();
-    gl_Position = uProjection * vec4(p1 + offset, 1.0); EmitVertex();
-    gl_Position = uProjection * vec4(p1 - offset, 1.0); EmitVertex();
+    gl_Position = uProjection * vec4(p0 + offset, 1.0); 
+    EmitVertex();
+
+    gl_Position = uProjection * vec4(p0 - offset, 1.0); 
+    EmitVertex();
+
+    gl_Position = uProjection * vec4(p1 + offset, 1.0); 
+    EmitVertex();
+
+    gl_Position = uProjection * vec4(p1 - offset, 1.0); 
+    EmitVertex();
 
     // splits off the newly created vertices, so that the next set doesn't mix in with the previous set
     EndPrimitive();

@@ -3,11 +3,14 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using System.Runtime.CompilerServices;
 
 namespace OpenTK_Project
 {
     public class Game : GameWindow
     {
+        private int ShaderStorageBufferHandle;
+
         private Camera? camera;
         private float deltaTime;
         private Vector2 lastMousePos;
@@ -19,6 +22,7 @@ namespace OpenTK_Project
 
         private List<SceneObject>? objects;
         private SceneObject? selectedRectangle;
+        private Vector3 sunDirection;
 
         public Game(int width = 1920, int height = 1080, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
@@ -52,6 +56,11 @@ namespace OpenTK_Project
             objects.AddRange(Mapper.CreateRectangle());
             camera.Position += Vector3.UnitX * 10 + Vector3.UnitZ * 3;
 
+            ShaderStorageBufferHandle = GL.GenBuffer();
+            nint[] substitute = new nint[0];
+            GL.BufferData(BufferTarget.ShaderStorageBuffer, 0, substitute, BufferUsageHint.DynamicDraw);
+
+            sunDirection = new Vector3(0f, 1, 1f).Normalized();
 
             base.OnLoad();
         }
@@ -110,7 +119,7 @@ namespace OpenTK_Project
             if ( keyboardInput.IsKeyPressed(Keys.Y) )
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
-                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor, modelURL: "Entity/fish");
+                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor, modelURL: "sphere");
                 rectangle.Mesh.Rotate(Vector3.UnitX, 90);
                 objects!.Add(rectangle);
             }
@@ -212,11 +221,9 @@ namespace OpenTK_Project
             {
                 float distance = Vector3.Distance(camera!.Position, selectedRectangle!.Mesh.LocalOrigin);
                 var scroll = MouseState.ScrollDelta.Y;
-                AngleMinimum += scroll > 0 ? 1 : -1;
                 distance += scroll * 20 * (1 - deltaTime * 10);
                 distance = float.Clamp(distance, 1f, 40f);
                 Vector3 newPosition = Vector3.Lerp(selectedRectangle.Mesh.LocalOrigin, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
-
                 selectedRectangle.Mesh.LocalOrigin = newPosition;
                 selectedRectangle.Mesh.Rotate(Vector3.UnitY, 50*deltaTime);
             }
@@ -295,9 +302,38 @@ namespace OpenTK_Project
             // using vertexbuffer to send data to GPU
             GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+            // switch to buffersubdata when too slow
+            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, ShaderStorageBufferHandle);
+
+            // vertex 1, 2, 3, normal, position, color
+
+            var triangles = new List<TriangleInfo>();
             foreach (SceneObject obj in objects )
             {
-                obj.Mesh.Render(ClientSize, camera, obj.Scale, Wireframe, obj.Dirty, obj.Selected);
+                for ( int i = 0; i < obj.Mesh.Indices.Length; i += 3 )
+                {
+                    Vector3 a = obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position;
+                    Vector3 b = obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position;
+                    Vector3 c = obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position;
+                    triangles.Add(new TriangleInfo
+                    {
+                        V0 = new Vector4(a, 0),
+                        V1 = new Vector4(b, 0),
+                        V2 = new Vector4(c, 0),
+                        Normal = new Vector4(Vector3.Normalize(Vector3.Cross(b - a, c - a)), 0),
+                        Origin = new Vector4(obj.Mesh.LocalOrigin, 0),
+                        Color = obj.Color,
+                        Orientation = obj.Mesh.Orientation
+                    });
+                }
+            }
+            GL.BufferData(BufferTarget.ShaderStorageBuffer, triangles.Count() * Unsafe.SizeOf<TriangleInfo>(), triangles.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, ShaderStorageBufferHandle);
+            int triangleOffset = 0;
+            foreach (SceneObject obj in objects )
+            {
+                obj.Mesh.Render(ClientSize, camera, obj.Scale, sunDirection, triangleOffset, Wireframe, obj.Dirty, obj.Selected);
+                triangleOffset += obj.Mesh.Indices.Length / 3;
             }
 
             this.Context.SwapBuffers();
