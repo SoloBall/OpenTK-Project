@@ -16,7 +16,7 @@ namespace OpenTK_Project
         public float Pitch = 0;
 
         public float near = 0.1f;
-        public float far = 10000f;
+        public float far = 1000f;
 
         public float speed = 5f;
         public float sensitivity = 0.1f;
@@ -24,7 +24,7 @@ namespace OpenTK_Project
         public Matrix4 projection;
         public Camera(Vector2i ClientSize)
         {
-            projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(90f), ClientSize.X / ClientSize.Y, near, far);
+            projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(110f), ClientSize.X / ClientSize.Y, near, far);
         }
 
         public void UpdateDirection()

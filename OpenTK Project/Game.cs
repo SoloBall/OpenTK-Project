@@ -24,7 +24,7 @@ namespace OpenTK_Project
         private SceneObject? selectedRectangle;
         private Vector3 sunDirection;
 
-        public Game(int width = 1920, int height = 1080, string title = "Base Window") : base(GameWindowSettings.Default,
+        public Game(int width = 1280, int height = 720, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
                 Title = title,
@@ -51,16 +51,12 @@ namespace OpenTK_Project
             CursorState = CursorState.Grabbed;
 
             GL.Enable(EnableCap.DepthTest);
-            //Mapper.LoadCube(objects, camera.Position - Vector3.UnitZ * 1000);
             //objects.AddRange(Mapper.CreateSilentHill());
             objects.AddRange(Mapper.CreateRectangle());
             camera.Position += Vector3.UnitX * 10 + Vector3.UnitZ * 3;
 
             ShaderStorageBufferHandle = GL.GenBuffer();
-            nint[] substitute = new nint[0];
-            GL.BufferData(BufferTarget.ShaderStorageBuffer, 0, substitute, BufferUsageHint.DynamicDraw);
-
-            sunDirection = new Vector3(0f, 1, 1f).Normalized();
+            sunDirection = new Vector3(0f, 0f, 1f).Normalized();
 
             base.OnLoad();
         }
@@ -142,6 +138,7 @@ namespace OpenTK_Project
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
                 SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor);
+                rectangle.Mesh.Rotate(Vector3.UnitZ, 30);
                 //rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj", 1);
                 objects!.Add(rectangle);
             }

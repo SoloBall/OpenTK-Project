@@ -250,7 +250,7 @@ namespace OpenTK_Project
             GL.UniformMatrix4(outlineViewLocation, false, ref view);
             GL.UniformMatrix4(outlineModelLocation, false, ref model);
 
-            GL.Uniform1(edgeThicknessLocation, 0.004f);
+            GL.Uniform1(edgeThicknessLocation, 0.003f);
             GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(35f));
 
             if ( selected )
