@@ -24,7 +24,7 @@ namespace OpenTK_Project
         private SceneObject? selectedRectangle;
         private Vector3 sunDirection;
 
-        public Game(int width = 1280, int height = 720, string title = "Base Window") : base(GameWindowSettings.Default,
+        public Game(int width = 2560, int height = 1440, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
                 Title = title,
@@ -56,12 +56,13 @@ namespace OpenTK_Project
             camera.Position += Vector3.UnitX * 10 + Vector3.UnitZ * 3;
 
             ShaderStorageBufferHandle = GL.GenBuffer();
-            sunDirection = new Vector3(0f, 0f, 1f).Normalized();
+            sunDirection = new Vector3(1f, 1f, 1f).Normalized();
 
             base.OnLoad();
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
+            sunDirection = RotateVector(Quaternion.FromAxisAngle(Vector3.UnitY, deltaTime), sunDirection);
             base.OnUpdateFrame(args);
 
             deltaTime = (float)args.Time;
@@ -115,7 +116,7 @@ namespace OpenTK_Project
             if ( keyboardInput.IsKeyPressed(Keys.Y) )
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
-                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor, modelURL: "sphere");
+                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor, modelURL: "/Entity/madara");
                 rectangle.Mesh.Rotate(Vector3.UnitX, 90);
                 objects!.Add(rectangle);
             }
@@ -309,9 +310,9 @@ namespace OpenTK_Project
             {
                 for ( int i = 0; i < obj.Mesh.Indices.Length; i += 3 )
                 {
-                    Vector3 a = obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position;
-                    Vector3 b = obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position;
-                    Vector3 c = obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position;
+                    Vector3 a = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position);
+                    Vector3 b = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position);
+                    Vector3 c = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position);
                     triangles.Add(new TriangleInfo
                     {
                         V0 = new Vector4(a, 0),
@@ -335,6 +336,13 @@ namespace OpenTK_Project
 
             this.Context.SwapBuffers();
             base.OnRenderFrame(args);
+        }
+        public Vector3 RotateVector(Quaternion rotation, Vector3 vector)
+        {
+            Quaternion q = Quaternion.Normalize(rotation);
+            Vector3 u = q.Xyz;
+            Vector3 t = 2.0f * Vector3.Cross(u, vector);
+            return vector + q.W * t + Vector3.Cross(u, t);
         }
         public void CameraCollidesWithRectangle(Vector3 proposedPosition, float velocity)
         {
