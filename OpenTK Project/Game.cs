@@ -138,7 +138,6 @@ namespace OpenTK_Project
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
                 SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor);
-                rectangle.Mesh.Rotate(Vector3.UnitZ, 30);
                 //rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj", 1);
                 objects!.Add(rectangle);
             }
