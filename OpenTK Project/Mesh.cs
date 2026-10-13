@@ -255,11 +255,11 @@ namespace OpenTK_Project
 
             if ( selected )
             {
-                GL.Uniform3(outlineColorLocation, new Vector3(0f, 1f, 1f));
+                GL.Uniform3(outlineColorLocation, new Vector3(1f, 1f, 0f));
             }
             else
             {
-                GL.Uniform3(outlineColorLocation, new Vector3(1f, 1f, 0f));
+                GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
             }
 
             GL.BindVertexArray(AdjacentVertexArrayObject);
