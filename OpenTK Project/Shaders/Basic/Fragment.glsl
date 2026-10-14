@@ -18,8 +18,13 @@ out vec4 color;
 
 
 void main(){
-    float lightRadius = 400;
-    float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
+    vec3 lightPos = cameraPos.xyz;
+    float lightRadius = 10000;
+    if (sunOrigin.w != 0)
+    {
+        lightPos = sunOrigin.xyz;
+    }
+    float darkFactor = clamp(distance(fPos, lightPos) / lightRadius, 0.0, 1.0);
     if (darkFactor > 0.9) {
         darkFactor = 0.9;
     }

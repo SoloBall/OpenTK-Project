@@ -25,6 +25,8 @@ namespace OpenTK_Project
         private Vector3 sunDirection;
         private int sunIndex = -1;
 
+        private Color4 skyColor = Color4.SkyBlue;
+
         private string equippedModel = "cube";
 
         public Game(int width = 1280, int height = 720, string title = "Base Window") : base(GameWindowSettings.Default,
@@ -46,7 +48,7 @@ namespace OpenTK_Project
             rand = new Random();
             IsVisible = true;
             isFirstMouse = true;
-            GL.ClearColor(new Color4(0.3f, 0.3f, 0.3f, 1f));
+            GL.ClearColor(skyColor);
 
             objects = new();
 
@@ -60,12 +62,14 @@ namespace OpenTK_Project
 
             ShaderStorageBufferHandle = GL.GenBuffer();
             sunDirection = new Vector3(1f, 1f, 1f).Normalized();
+            GL.Enable(EnableCap.CullFace);
+            GL.CullFace(TriangleFace.Back);
 
             base.OnLoad();
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
-            //sunDirection = RotateVector(Quaternion.FromAxisAngle(Vector3.UnitY -Vector3.UnitX, deltaTime * 2), sunDirection);
+            UpdateSun();
             base.OnUpdateFrame(args);
 
             deltaTime = (float)args.Time;
@@ -152,14 +156,14 @@ namespace OpenTK_Project
                 {
                     case "cube":
                         Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
-                        SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, Color4.White);
+                        SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor);
                         objects!.Add(rectangle);
                         break;
 
                     case "sun":
                         if (sunIndex == -1)
                         {
-                            SceneObject sun = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, Color4.Yellow);
+                            SceneObject sun = new(new Vector3(50, 50, 50), Vector3.Zero + Vector3.UnitZ * 900, Color4.Yellow, modelURL: "Entity/sun");
                             sun.Mesh.Tag = "sun";
                             objects!.Add(sun);
                             sunIndex = objects.Count() - 1;
@@ -252,6 +256,20 @@ namespace OpenTK_Project
                 Vector3 newPosition = Vector3.Lerp(selectedRectangle.Mesh.LocalOrigin, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
                 selectedRectangle.Mesh.LocalOrigin = newPosition;
                 selectedRectangle.Mesh.Rotate(new Vector3(1, 1, 1), 50*deltaTime);
+            }
+        }
+        void UpdateSun( )
+        {
+            if ( sunIndex != -1 )
+            {
+                Mesh mesh = objects[sunIndex].Mesh;
+                mesh.Rotate(new Vector3(1, 1, 1), 10 * deltaTime);
+                mesh.LocalOrigin = RotateVector(Quaternion.FromAxisAngle(new Vector3(1, 1, 0), MathHelper.DegreesToRadians(20 * deltaTime)), objects[sunIndex].Mesh.LocalOrigin);
+                float offset = Vector3.Dot(Vector3.UnitZ, Vector3.Normalize(mesh.LocalOrigin));
+                float redOffset = (float)Math.Clamp(1.0f - Math.Abs(offset) - 0.2, 0.0, 0.25);
+                // add a kind of red when sunset/sunrise
+                skyColor = new Color4(offset * Color4.SkyBlue.R + redOffset, (float)Math.Clamp(offset, 0.2, 1) * Color4.SkyBlue.G, (float)Math.Clamp(offset, 0.2, 1) * Color4.SkyBlue.B, 1);
+                GL.ClearColor(skyColor);
             }
         }
         void CreateGrid(int size = 15, int spread = 3 )

@@ -241,6 +241,7 @@ namespace OpenTK_Project
 
             // outline pass
 
+            GL.Disable(EnableCap.CullFace);
             GL.UseProgram(OutlineShader);
 
             if ( dirty ) 
@@ -269,21 +270,30 @@ namespace OpenTK_Project
 
             GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(35f));
 
-            if ( selected )
+            if (Tag == "sun" )
             {
-                GL.Uniform1(edgeThicknessLocation, 0.7f);
-                GL.Uniform3(outlineColorLocation, new Vector3(0f, 1f, 1f));
+                GL.Uniform1(edgeThicknessLocation, 0.5f);
+                GL.Uniform3(outlineColorLocation, new Vector3(1, 1, 0.5f));
             }
             else
             {
                 GL.Uniform1(edgeThicknessLocation, 0.003f);
-                GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
+                if ( selected )
+                {
+                    GL.Uniform3(outlineColorLocation, new Vector3(0f, 1f, 1f));
+                }
+                else
+                {
+                    GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
+                }
             }
 
             GL.BindVertexArray(AdjacentVertexArrayObject);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferObject);
             GL.DrawElements(PrimitiveType.TrianglesAdjacency, AdjacentIndices.Count(), DrawElementsType.UnsignedInt, 0);
             GL.Disable(EnableCap.Blend);
+            GL.Enable(EnableCap.CullFace);
+            GL.CullFace(TriangleFace.Back);
         }
         public void Rotate(Vector3 axis, float angle )
         {
