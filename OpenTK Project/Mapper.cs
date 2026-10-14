@@ -39,7 +39,7 @@ namespace OpenTK_Project
         {
             List<SceneObject> objects = new List<SceneObject>();
             Vector3 position = -Vector3.UnitZ * 1;
-            SceneObject plane = new(new Vector3(100, 100, 1), position);
+            SceneObject plane = new(new Vector3(1000, 1000, 1), position);
             objects.Add(plane);
             return objects;
         }

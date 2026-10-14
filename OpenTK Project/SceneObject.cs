@@ -11,7 +11,7 @@ namespace OpenTK_Project
         public bool Dirty;
         public Mesh Mesh;
 
-        public SceneObject(Vector3 scale, Vector3 position, Color4? color = null, bool selected = false, bool dirty = true, string modelURL = "cube" )
+        public SceneObject(Vector3 scale, Vector3 position, Color4? color = null, bool selected = false, bool dirty = true, string modelURL = "cube")
         {
             Scale = scale;
             Color = color ?? new Color4(1f, 1f, 1f, 1f);
