@@ -1,50 +1,78 @@
 #version 450 core
 
-struct triangle 
+struct Triangle 
 {
     vec4 a, b, c, normal, origin, color, orientation;
 };
 layout(std430, binding = 0) buffer Triangles
 {
-    triangle data[];
+    Triangle data[];
 };
 in vec4 fColor;
 in vec3 fPos;
 uniform vec3 cameraPos;
 uniform vec3 sunDirection;
 uniform int triangleOffset;
+uniform vec4 sunOrigin;
 out vec4 color;
 
 
 void main(){
-    float lightRadius = 400;
-    float darkFactor = clamp(distance(fPos, cameraPos) / lightRadius, 0.0, 1.0);
+    vec3 lightPos = cameraPos.xyz;
+    float lightRadius = 10000;
+    if (sunOrigin.w != 0)
+    {
+        lightPos = sunOrigin.xyz;
+    }
+    float darkFactor = clamp(distance(fPos, lightPos) / lightRadius, 0.0, 1.0);
     if (darkFactor > 0.9) {
         darkFactor = 0.9;
     }
     vec4 darkFragColor = fColor * (1 - darkFactor);
-    if (dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, sunDirection) > 0) 
+    vec3 directionToSun = vec3(0, 0, 0);
+    if (sunOrigin.w != 0) 
     {
-        float highestT = -1;
+        directionToSun = sunOrigin.xyz - fPos;
+        if (length(directionToSun) < 0.9) // a little more than the max distance inside the cube sun 
+        {
+            color = fColor;
+            return;
+        }
+        directionToSun = normalize(directionToSun);
+    }
+    else  
+    {
+        directionToSun = sunDirection;
+    }
+    if (dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, directionToSun) > 0) 
+    {
+        float lowestT = 3.4e38;
         for (int i = 0; i < data.length(); i++) 
         {
             if (i == gl_PrimitiveID + triangleOffset)
             {
                 continue;
             }
-            triangle triangle = data[i];
+            Triangle triangle = data[i];
+            if (sunOrigin.w != 0)
+            {
+                if (length(sunOrigin.xyz - triangle.origin.xyz)  <= 0.9f)
+                {
+                    continue;
+                }
+            }
             vec3 planeOriginVector = triangle.a.xyz + triangle.origin.xyz;
             vec3 planeConnectionVector1 = triangle.b.xyz - planeOriginVector + triangle.origin.xyz;
             vec3 planeConnectionVector2 = triangle.c.xyz - planeOriginVector + triangle.origin.xyz;
             vec3 normal = triangle.normal.xyz;
-            float tDenom = dot(normal, sunDirection);
+            float tDenom = dot(normal, directionToSun);
             if (abs(tDenom) < 1e-8) continue; 
-            float t = dot((planeOriginVector - fPos), normal) / tDenom;
-            if (t < 1e-5)
+            float t = dot((planeOriginVector - fPos), normal) / (tDenom);
+            if (t < 1)
             {
                 continue;
             }
-            vec3 point = fPos + t * sunDirection;
+            vec3 point = fPos + t * directionToSun;
             vec3 v0 = planeConnectionVector1;
             vec3 v1 = planeConnectionVector2;
             vec3 v2 = point - planeOriginVector;
@@ -64,20 +92,22 @@ void main(){
             {
                 continue;
             }
-            if (t > highestT) 
+            if (t < lowestT) 
             {
-                highestT = t;
+                lowestT = t;
             }
         }
-        color = darkFragColor;
-        if (highestT > 0) 
+        if (lowestT < 3.4e38) {
+            color = darkFragColor * clamp(lowestT / 10, 0.4f, 0.95f);
+        }
+        else 
         {
-            color = darkFragColor * clamp(0.3 + highestT / 50, 0.4f, 0.95f);
+            color = darkFragColor;
         }
     }
     else 
     {
-        float nigga = dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, sunDirection);
-        color = darkFragColor * clamp(((1 - nigga*-1)), 0.4f, 1f);
+        float nigga = dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, directionToSun);
+        color = darkFragColor * clamp(((1 - nigga*-1)), 0.4, 1);
     }
 }

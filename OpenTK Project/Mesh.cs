@@ -13,6 +13,7 @@ namespace OpenTK_Project
         public Vector3 LocalOrigin { get; set; }
         public Vector3 Scale { get; set; }
         public Quaternion Orientation { get; set; }
+        public string Tag { get; set; }
         private readonly uint[] AdjacentIndices;
         private readonly int sizeInBytes = VertexPositionColor.VertexInfo.SizeInBytes;
         private Matrix4 Model =>
@@ -21,7 +22,7 @@ namespace OpenTK_Project
                 Matrix4.CreateTranslation(LocalOrigin);
 
 
-        public Mesh( VertexPositionColor[] vertices, uint[] indices, Vector3 localOrigin, Vector3 scale)
+        public Mesh( VertexPositionColor[] vertices, uint[] indices, Vector3 localOrigin, Vector3 scale, string tag = "")
         {
             Vertices = vertices;
             Indices = indices;
@@ -29,6 +30,7 @@ namespace OpenTK_Project
             Orientation = Quaternion.Identity;
             Scale = scale;
             AdjacentIndices = AdjacencyMeshBuilder.BuildAdjacencyIndices(Indices);
+            Tag = tag;
 
             if ( VertexBufferObject != 0 )
             {
@@ -180,9 +182,13 @@ namespace OpenTK_Project
             GL.DeleteShader(outlineGeometryShaderHandle);
             GL.DeleteShader(outlineFragmentShaderHandle);
         }
-        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, Vector3 sunDirection, int triangleOffset, bool wireframe = false, bool dirty = false, bool selected = false)
+        public void Render(Vector2i ClientSize, Camera camera, Vector3 scale, Vector3 sunDirection, int triangleOffset, bool wireframe = false, bool dirty = false, bool selected = false, Vector3? sunOrigin = null)
         {
-            
+            if (Tag == "sun" )
+            {
+                GL.Enable(EnableCap.Blend);
+                GL.BlendFunc(BlendingFactor.One, BlendingFactor.One);
+            }
             GL.UseProgram(BasicShader);
             if ( dirty ) 
             {
@@ -205,6 +211,8 @@ namespace OpenTK_Project
             int sunDirectionLocation = GL.GetUniformLocation(BasicShader, "sunDirection");
             int triangleOffsetLocation = GL.GetUniformLocation(BasicShader, "triangleOffset");
 
+            int sunOriginLocation = GL.GetUniformLocation(BasicShader, "sunOrigin");
+
             GL.UniformMatrix4(projectionLocation, false, ref camera.projection);
             GL.UniformMatrix4(viewLocation, false, ref view);
             GL.UniformMatrix4(modelLocation, false, ref model);
@@ -212,6 +220,15 @@ namespace OpenTK_Project
             GL.Uniform3(cameraPosLocation, camera.Position);
             GL.Uniform3(sunDirectionLocation, sunDirection);
             GL.Uniform1(triangleOffsetLocation, triangleOffset);
+
+            if (sunOrigin == null )
+            {
+                GL.Uniform4(sunOriginLocation, new Vector4(0, 0, 0, 0));
+            }
+            else
+            {
+                GL.Uniform4(sunOriginLocation, new Vector4((Vector3)sunOrigin, 1));
+            }
 
             GL.BindVertexArray(VertexArrayObject);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, IndexBufferObject);
@@ -224,6 +241,7 @@ namespace OpenTK_Project
 
             // outline pass
 
+            GL.Disable(EnableCap.CullFace);
             GL.UseProgram(OutlineShader);
 
             if ( dirty ) 
@@ -250,21 +268,32 @@ namespace OpenTK_Project
             GL.UniformMatrix4(outlineViewLocation, false, ref view);
             GL.UniformMatrix4(outlineModelLocation, false, ref model);
 
-            GL.Uniform1(edgeThicknessLocation, 0.003f);
             GL.Uniform1(creaseCosThresholdLocation, float.DegreesToRadians(35f));
 
-            if ( selected )
+            if (Tag == "sun" )
             {
-                GL.Uniform3(outlineColorLocation, new Vector3(1f, 1f, 0f));
+                GL.Uniform1(edgeThicknessLocation, 0.5f);
+                GL.Uniform3(outlineColorLocation, new Vector3(1, 1, 0.5f));
             }
             else
             {
-                GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
+                GL.Uniform1(edgeThicknessLocation, 0.003f);
+                if ( selected )
+                {
+                    GL.Uniform3(outlineColorLocation, new Vector3(0f, 1f, 1f));
+                }
+                else
+                {
+                    GL.Uniform3(outlineColorLocation, new Vector3(0f, 0f, 0f));
+                }
             }
 
             GL.BindVertexArray(AdjacentVertexArrayObject);
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, AdjacentIndexBufferObject);
             GL.DrawElements(PrimitiveType.TrianglesAdjacency, AdjacentIndices.Count(), DrawElementsType.UnsignedInt, 0);
+            GL.Disable(EnableCap.Blend);
+            GL.Enable(EnableCap.CullFace);
+            GL.CullFace(TriangleFace.Back);
         }
         public void Rotate(Vector3 axis, float angle )
         {

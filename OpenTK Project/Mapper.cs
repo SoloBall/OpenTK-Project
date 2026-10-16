@@ -38,8 +38,8 @@ namespace OpenTK_Project
         public static List<SceneObject> CreateRectangle()
         {
             List<SceneObject> objects = new List<SceneObject>();
-            Vector3 position = -Vector3.UnitZ * 1;
-            SceneObject plane = new(new Vector3(100, 100, 1), position);
+            Vector3 position = -Vector3.UnitZ;
+            SceneObject plane = new(new Vector3(1000, 1000, 1), position,  color: Color4.Green);
             objects.Add(plane);
             return objects;
         }
