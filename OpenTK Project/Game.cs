@@ -23,8 +23,13 @@ namespace OpenTK_Project
         private List<SceneObject>? objects;
         private SceneObject? selectedRectangle;
         private Vector3 sunDirection;
+        private int sunIndex = -1;
 
-        public Game(int width = 2560, int height = 1440, string title = "Base Window") : base(GameWindowSettings.Default,
+        private Color4 skyColor = Color4.SkyBlue;
+
+        private string equippedModel = "cube";
+
+        public Game(int width = 1280, int height = 720, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
                 Title = title,
@@ -43,7 +48,7 @@ namespace OpenTK_Project
             rand = new Random();
             IsVisible = true;
             isFirstMouse = true;
-            GL.ClearColor(new Color4(0.3f, 0.3f, 0.3f, 1f));
+            GL.ClearColor(skyColor);
 
             objects = new();
 
@@ -57,12 +62,14 @@ namespace OpenTK_Project
 
             ShaderStorageBufferHandle = GL.GenBuffer();
             sunDirection = new Vector3(1f, 1f, 1f).Normalized();
+            GL.Enable(EnableCap.CullFace);
+            GL.CullFace(TriangleFace.Back);
 
             base.OnLoad();
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
-            sunDirection = RotateVector(Quaternion.FromAxisAngle(Vector3.UnitY, deltaTime), sunDirection);
+            UpdateSun();
             base.OnUpdateFrame(args);
 
             deltaTime = (float)args.Time;
@@ -120,6 +127,14 @@ namespace OpenTK_Project
                 rectangle.Mesh.Rotate(Vector3.UnitX, 90);
                 objects!.Add(rectangle);
             }
+            if ( keyboardInput.IsKeyPressed(Keys.D1) )
+            {
+                equippedModel = "cube";
+            }
+            else if ( keyboardInput.IsKeyPressed(Keys.D2) )
+            {
+                equippedModel = "sun";
+            }
             if ( keyboardInput.IsKeyPressed(Keys.K) )
             {
                 if ( !Wireframe )
@@ -137,15 +152,32 @@ namespace OpenTK_Project
             }
             if (MouseState.IsButtonPressed(MouseButton.Left))
             {
-                Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(),1f);
-                SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor);
-                rectangle.Mesh.Rotate(Vector3.UnitZ, 30);
-                //rectangle.Mesh = GrabMeshFromModels(rectangle.Color, rectangle.Position, "../../../Assets/Models/cube.obj", 1);
-                objects!.Add(rectangle);
+                switch ( equippedModel )
+                {
+                    case "cube":
+                        Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
+                        SceneObject rectangle = new(new Vector3(1, 1, 1), camera.Position + camera.Front * 3, randomColor);
+                        objects!.Add(rectangle);
+                        break;
+
+                    case "sun":
+                        if (sunIndex == -1)
+                        {
+                            SceneObject sun = new(new Vector3(50, 50, 50), Vector3.Zero + Vector3.UnitZ * 900, Color4.Yellow, modelURL: "Entity/sun");
+                            sun.Mesh.Tag = "sun";
+                            objects!.Add(sun);
+                            sunIndex = objects.Count() - 1;
+                        }
+                        else
+                        {
+                            objects[sunIndex].Mesh.LocalOrigin = camera.Position + camera.Front * 5;
+                        }
+                            break;
+                }
             }
             if ( MouseState.IsButtonPressed(MouseButton.Middle) )
             {
-                SceneObject rectangle = new(new Vector3(3, 3, 3), camera.Position + camera.Front * 3, Color4.Yellow, modelURL: "Entity/cow");
+                SceneObject rectangle = new(new Vector3(100, 100, 100), camera.Position + camera.Front * 3, Color4.Yellow, modelURL: "Entity/cow");
                 rectangle.Mesh.Rotate(Vector3.UnitX, 90);
                 objects!.Add(rectangle);
             }
@@ -223,7 +255,21 @@ namespace OpenTK_Project
                 distance = float.Clamp(distance, 1f, 40f);
                 Vector3 newPosition = Vector3.Lerp(selectedRectangle.Mesh.LocalOrigin, camera.Position + camera.Front * distance, 0.01f + deltaTime * 2);
                 selectedRectangle.Mesh.LocalOrigin = newPosition;
-                selectedRectangle.Mesh.Rotate(Vector3.UnitY, 50*deltaTime);
+                selectedRectangle.Mesh.Rotate(new Vector3(1, 1, 1), 50*deltaTime);
+            }
+        }
+        void UpdateSun( )
+        {
+            if ( sunIndex != -1 )
+            {
+                Mesh mesh = objects[sunIndex].Mesh;
+                mesh.Rotate(new Vector3(1, 1, 1), 10 * deltaTime);
+                mesh.LocalOrigin = RotateVector(Quaternion.FromAxisAngle(new Vector3(1, 1, 0), MathHelper.DegreesToRadians(20 * deltaTime)), objects[sunIndex].Mesh.LocalOrigin);
+                float offset = Vector3.Dot(Vector3.UnitZ, Vector3.Normalize(mesh.LocalOrigin));
+                float redOffset = (float)Math.Clamp(1.0f - Math.Abs(offset) - 0.2, 0.0, 0.25);
+                // add a kind of red when sunset/sunrise
+                skyColor = new Color4(offset * Color4.SkyBlue.R + redOffset, (float)Math.Clamp(offset, 0.2, 1) * Color4.SkyBlue.G, (float)Math.Clamp(offset, 0.2, 1) * Color4.SkyBlue.B, 1);
+                GL.ClearColor(skyColor);
             }
         }
         void CreateGrid(int size = 15, int spread = 3 )
@@ -328,9 +374,14 @@ namespace OpenTK_Project
             GL.BufferData(BufferTarget.ShaderStorageBuffer, triangles.Count() * Unsafe.SizeOf<TriangleInfo>(), triangles.ToArray(), BufferUsageHint.DynamicDraw);
             GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, ShaderStorageBufferHandle);
             int triangleOffset = 0;
+            Vector3? sunOrigin = null;
+            if (sunIndex != -1 )
+            {
+                sunOrigin = objects[sunIndex].Mesh.LocalOrigin;
+            }
             foreach (SceneObject obj in objects )
             {
-                obj.Mesh.Render(ClientSize, camera, obj.Scale, sunDirection, triangleOffset, Wireframe, obj.Dirty, obj.Selected);
+                obj.Mesh.Render(ClientSize, camera, obj.Scale, sunDirection, triangleOffset, Wireframe, obj.Dirty, obj.Selected, sunOrigin: sunOrigin);
                 triangleOffset += obj.Mesh.Indices.Length / 3;
             }
 
