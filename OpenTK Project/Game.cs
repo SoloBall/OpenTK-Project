@@ -3,6 +3,7 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using OpenTK_Project.Logic.Raytracing;
 using System.Runtime.CompilerServices;
 
 namespace OpenTK_Project
@@ -21,6 +22,9 @@ namespace OpenTK_Project
         private Random? rand;
 
         private List<SceneObject>? objects;
+        private Branch primitives;
+        private bool isPrimitivesDirty = true;
+
         private SceneObject? selectedRectangle;
         private Vector3 sunDirection;
         private int sunIndex = -1;
@@ -351,7 +355,31 @@ namespace OpenTK_Project
 
             // vertex 1, 2, 3, normal, position, color
 
-            var triangles = new List<TriangleInfo>();
+            if ( isPrimitivesDirty )
+            {
+                UpdatePrimitives();
+
+                foreach ( SceneObject obj in objects )
+                {
+                    for ( int i = 0; i < obj.Mesh.Indices.Length; i += 3 )
+                    {
+                        Vector3 a = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position);
+                        Vector3 b = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position);
+                        Vector3 c = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position);
+                        primitives.Add(new Leaf
+                        {
+                            V0 = new Vector4(a, 0),
+                            V1 = new Vector4(b, 0),
+                            V2 = new Vector4(c, 0),
+                            Normal = new Vector4(Vector3.Normalize(Vector3.Cross(b - a, c - a)), 0),
+                            Origin = new Vector4(obj.Mesh.LocalOrigin, 0),
+                            Color = obj.Color,
+                            Orientation = obj.Mesh.Orientation
+                        });
+                    }
+                }
+            }
+            var triangles = new List<Leaf>();
             foreach (SceneObject obj in objects )
             {
                 for ( int i = 0; i < obj.Mesh.Indices.Length; i += 3 )
@@ -359,7 +387,7 @@ namespace OpenTK_Project
                     Vector3 a = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position);
                     Vector3 b = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position);
                     Vector3 c = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position);
-                    triangles.Add(new TriangleInfo
+                    triangles.Add(new Leaf
                     {
                         V0 = new Vector4(a, 0),
                         V1 = new Vector4(b, 0),
@@ -371,7 +399,7 @@ namespace OpenTK_Project
                     });
                 }
             }
-            GL.BufferData(BufferTarget.ShaderStorageBuffer, triangles.Count() * Unsafe.SizeOf<TriangleInfo>(), triangles.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ShaderStorageBuffer, triangles.Count() * Unsafe.SizeOf<Leaf>(), triangles.ToArray(), BufferUsageHint.DynamicDraw);
             GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, ShaderStorageBufferHandle);
             int triangleOffset = 0;
             Vector3? sunOrigin = null;
@@ -388,6 +416,43 @@ namespace OpenTK_Project
             this.Context.SwapBuffers();
             base.OnRenderFrame(args);
         }
+
+        private void UpdatePrimitives( )
+        {
+            primitives = new Branch();
+            List<TrianglePrimitive> triangles = new List<TrianglePrimitive>();
+            Vector3 rootMin = Vector3.PositiveInfinity;
+            Vector3 rootMax = Vector3.NegativeInfinity;
+            foreach ( SceneObject obj in objects )
+            {
+                for ( int i = 0; i < obj.Mesh.Indices.Length; i += 3 )
+                {
+                    Vector3 a = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position);
+                    Vector3 b = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position);
+                    Vector3 c = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position);
+                    Vector3 Min = new Vector3(Math.Min(c.X, Math.Min(a.X, b.X)), Math.Min(c.Y, Math.Min(a.Y, b.Y)), Math.Min(c.Z, Math.Min(a.Z, b.Z)));
+                    Vector3 Max = new Vector3(Math.Max(c.X, Math.Max(a.X, b.X)), Math.Max(c.Y, Math.Max(a.Y, b.Y)), Math.Max(c.Z, Math.Max(a.Z, b.Z)));
+                    rootMin = Min < rootMin ? Min : rootMin;
+                    triangles.Add(new TrianglePrimitive
+                    {
+                        V0 = new Vector4(a, 0),
+                        V1 = new Vector4(b, 0),
+                        V2 = new Vector4(c, 0),
+                        Normal = new Vector4(Vector3.Normalize(Vector3.Cross(b - a, c - a)), 0),
+                        Origin = new Vector4(obj.Mesh.LocalOrigin, 0),
+                        Min = new Vector4(Min, 0),
+                        Max = new Vector4(Max, 0),
+                        Centroid = new Vector4((a + b + c) / 3),
+                        Color = obj.Color,
+                        Orientation = obj.Mesh.Orientation
+                    });
+                }
+            }
+            triangles.OrderBy(x => x.Centroid);
+            isPrimitivesDirty = false;
+            primitives.Populate(triangles.ToArray());
+        }
+
         public Vector3 RotateVector(Quaternion rotation, Vector3 vector)
         {
             Quaternion q = Quaternion.Normalize(rotation);

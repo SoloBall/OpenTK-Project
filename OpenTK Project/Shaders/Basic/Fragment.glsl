@@ -2,7 +2,7 @@
 
 struct Triangle 
 {
-    vec4 a, b, c, normal, origin, color, orientation;
+    vec4 a, b, c, normal, origin, minPoint, maxPoint, centroidPoint, color, orientation;
 };
 layout(std430, binding = 0) buffer Triangles
 {
@@ -44,7 +44,7 @@ void main(){
     {
         directionToSun = sunDirection;
     }
-    if (dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, directionToSun) > 0) 
+    if (dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, directionToSun) > 0 && dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, cameraPos) > 0) 
     {
         float lowestT = 3.4e38;
         for (int i = 0; i < data.length(); i++) 
