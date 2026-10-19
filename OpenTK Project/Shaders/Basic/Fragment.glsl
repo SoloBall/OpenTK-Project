@@ -46,7 +46,7 @@ void main(){
     }
     if (dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, directionToSun) > 0 && dot(data[gl_PrimitiveID + triangleOffset].normal.xyz, cameraPos) > 0) 
     {
-        float lowestT = 3.4e38;
+        float lowestRayLength = 3.4e38;
         for (int i = 0; i < data.length(); i++) 
         {
             if (i == gl_PrimitiveID + triangleOffset)
@@ -67,12 +67,12 @@ void main(){
             vec3 normal = triangle.normal.xyz;
             float tDenom = dot(normal, directionToSun);
             if (abs(tDenom) < 1e-8) continue; 
-            float t = dot((planeOriginVector - fPos), normal) / (tDenom);
-            if (t < 1)
+            float rayLength = dot((planeOriginVector - fPos), normal) / (tDenom);
+            if (rayLength < 1)
             {
                 continue;
             }
-            vec3 point = fPos + t * directionToSun;
+            vec3 point = fPos + rayLength * directionToSun;
             vec3 v0 = planeConnectionVector1;
             vec3 v1 = planeConnectionVector2;
             vec3 v2 = point - planeOriginVector;
@@ -92,13 +92,13 @@ void main(){
             {
                 continue;
             }
-            if (t < lowestT) 
+            if (rayLength < lowestRayLength) 
             {
-                lowestT = t;
+                lowestRayLength = rayLength;
             }
         }
-        if (lowestT < 3.4e38) {
-            color = darkFragColor * clamp(lowestT / 10, 0.4f, 0.95f);
+        if (lowestRayLength < 3.4e38) {
+            color = darkFragColor * clamp(lowestRayLength / 10, 0.4f, 0.95f);
         }
         else 
         {

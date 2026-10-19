@@ -4,6 +4,6 @@ namespace OpenTK_Project.Logic.Raytracing
 {
     public class Leaf
     {
-        List<TrianglePrimitive> Triangles;
+        public TrianglePrimitive[] Triangles;
     }
 }
