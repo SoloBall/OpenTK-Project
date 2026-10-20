@@ -1,28 +1,32 @@
 ﻿using OpenTK.Mathematics;
+using System.Text.Json;
 
 namespace OpenTK_Project.Logic.Raytracing
 {
     public class Branch
     {
         public Branch? LeftChild, RightChild;
+        public uint? LeftChildIndex, RightChildIndex, ParentIndex, SelfIndex;
         public TrianglePrimitive[]? Triangles;
+        private Vector3 min, max;
         private int maxLeafSize = 4;
         private float traversalCost = 1;
         private float intersectionCost = 1;
 
-        public void Populate( TrianglePrimitive[] primitives, Vector3 min, Vector3 max )
+        public uint Populate( TrianglePrimitive[] primitives, Vector3 min, Vector3 max, uint index = 0 )
         {
+            index++;
             float rootArea = Area(min, max);
-            float minArea = rootArea;
-            int minAreaIndex = 0;
-            for (int i = 0; i < primitives.Length; i++ )
+            float minCost = float.PositiveInfinity;
+            int minCostIndex = 0;
+            for (int i = 1; i < primitives.Length; i++ )
             {
                 Vector3 leftMin = Vector3.PositiveInfinity;
                 Vector3 leftMax = Vector3.NegativeInfinity;
                 for ( int k = 0; k < i; k++ )
                 {
                     leftMin = GetMin(leftMin, primitives[k].Min.Xyz);
-                    leftMax = GetMin(leftMax, primitives[k].Max.Xyz);
+                    leftMax = GetMax(leftMax, primitives[k].Max.Xyz);
                 }
 
                 Vector3 rightMin = Vector3.PositiveInfinity;
@@ -36,17 +40,17 @@ namespace OpenTK_Project.Logic.Raytracing
                 float leftArea = Area(leftMin, leftMax);
                 float rightArea = Area(rightMin, rightMax);
 
-                float currentArea = leftArea * i + rightArea * ( primitives.Length - i);
+                float currentCost = leftArea * i + rightArea * ( primitives.Length - i);
 
-                if (currentArea < minArea)
+                if (currentCost < minCost)
                 {
-                    minArea = currentArea;
-                    minAreaIndex = i;
+                    minCost = currentCost;
+                    minCostIndex = i;
                 }
             }
-            float splitCost = traversalCost + minArea / rootArea * intersectionCost;
+            float splitCost = traversalCost + minCost / rootArea * intersectionCost;
             float leafCost = primitives.Length * intersectionCost;
-            if (minAreaIndex <= maxLeafSize && splitCost >= leafCost && primitives.Length - minAreaIndex <= maxLeafSize)
+            if (minCostIndex <= maxLeafSize && primitives.Length - minCostIndex <= maxLeafSize)
             {
                 Triangles = primitives;
             }
@@ -54,53 +58,71 @@ namespace OpenTK_Project.Logic.Raytracing
             {
                 Vector3 leftMin = Vector3.PositiveInfinity;
                 Vector3 leftMax = Vector3.NegativeInfinity;
-                for ( int i = 0; i < minAreaIndex; i++ )
+                for ( int i = 0; i < minCostIndex; i++ )
                 {
                     leftMin = GetMin(leftMin, primitives[i].Min.Xyz);
-                    leftMax = GetMin(leftMax, primitives[i].Max.Xyz);
+                    leftMax = GetMax(leftMax, primitives[i].Max.Xyz);
                 }
-                LeftChild = new Branch();
-                TrianglePrimitive[] leftPrimitives = new TrianglePrimitive[minAreaIndex];
-                for (int i = 0; i <  minAreaIndex; i++ )
+                TrianglePrimitive[] leftPrimitives = new TrianglePrimitive[minCostIndex];
+                for (int i = 0; i <  minCostIndex; i++ )
                 {
                     leftPrimitives[i] = primitives[i];
                 }
-
+                LeftChild = new Branch();
 
                 Vector3 rightMin = Vector3.PositiveInfinity;
                 Vector3 rightMax = Vector3.NegativeInfinity;
-                for ( int i = minAreaIndex; i < primitives.Length; i++ )
+                for ( int i = minCostIndex; i < primitives.Length; i++ )
                 {
                     rightMin = GetMin(rightMin, primitives[i].Min.Xyz);
                     rightMax = GetMax(rightMax, primitives[i].Max.Xyz);
                 }
-                TrianglePrimitive[] rightPrimitives = new TrianglePrimitive[primitives.Length - minAreaIndex];
-                for ( int i = minAreaIndex; i < primitives.Length; i++ )
+                TrianglePrimitive[] rightPrimitives = new TrianglePrimitive[primitives.Length - minCostIndex];
+                for ( int i = minCostIndex; i < primitives.Length; i++ )
                 {
-                    rightPrimitives[i - minAreaIndex] = primitives[i];
+                    rightPrimitives[i - minCostIndex] = primitives[i];
                 }
+                RightChild = new Branch();
+
+                LeftChildIndex = LeftChild.Populate(leftPrimitives, leftMin, leftMax, index);
+                RightChildIndex = RightChild.Populate(rightPrimitives, rightMin, rightMax, index);
+                ParentIndex = index - 1;
+                SelfIndex = index;
+                this.min = min;
+                this.max = max;
             }
+            return index;
         }
-        public List<TrianglePrimitive> GetPrimitives()
+        public List<ShaderNode> GetNodes()
         {
-            List<TrianglePrimitive> primitives = new List<TrianglePrimitive>();
+            List<ShaderNode> nodes = new List<ShaderNode>();
+            ShaderNode node = new ShaderNode();
+            node.Min = new Vector4(min, 0);
+            node.Max = new Vector4(max, 0);
+            node.Self = (uint)SelfIndex!;
+            if (ParentIndex != null )
+            {
+                node.Parent = (uint)ParentIndex;
+            }
             if ( Triangles != null )
             {
-                primitives.AddRange(Triangles);
+                node.Triangles = Triangles.ToArray();
             }
             else
             {
                 if (LeftChild != null )
                 {
-                    primitives.AddRange(LeftChild.GetPrimitives());
+                    node.Left = (uint)LeftChild.SelfIndex!;
+                    nodes.AddRange(LeftChild.GetNodes());
                 }
                 if ( RightChild != null )
                 {
-                    primitives.AddRange(RightChild.GetPrimitives());
+                    node.Left = (uint)RightChild.SelfIndex!;
+                    nodes.AddRange(RightChild.GetNodes());
                 }
             }
-            Console.WriteLine(primitives.Count());
-            return primitives;
+            nodes.Add(node);
+            return nodes;
         }
         private float Area(Vector3 min, Vector3 max)
         {

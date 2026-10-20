@@ -126,10 +126,6 @@ namespace OpenTK_Project
             {
                 objects!.Clear();
             }
-            if ( keyboardInput.IsKeyPressed(Keys.Enter) )
-            {
-                Console.WriteLine(JsonSerializer.Serialize(primitives.GetPrimitives(), typeof(List<TrianglePrimitive>)));
-            }
             if ( keyboardInput.IsKeyPressed(Keys.Y) )
             {
                 Color4 randomColor = new((float)rand!.NextDouble(), (float)rand.NextDouble(), (float)rand.NextDouble(), 1f);
@@ -359,15 +355,20 @@ namespace OpenTK_Project
             // switch to buffersubdata when too slow
             GL.BindBuffer(BufferTarget.ShaderStorageBuffer, ShaderStorageBufferHandle);
 
-            // vertex 1, 2, 3, normal, position, color
             isPrimitivesDirty = true; // change to only when something changes
             if ( isPrimitivesDirty )
             {
                 UpdatePrimitives();
             }
-            var triangles = primitives.GetPrimitives();
+            List<ShaderNode> triangles = primitives.GetNodes();
+            triangles.OrderBy(x => x.Self);
+            nint sizeInBytes = 0;
+            foreach (ShaderNode node in triangles )
+            {
+                sizeInBytes += Unsafe.SizeOf<TrianglePrimitive>() * node.Triangles.Length + 16 + 16 + 16; // 4 * sizeof(int32) = 16 + two vec4
+            }
             
-            GL.BufferData(BufferTarget.ShaderStorageBuffer, triangles.Count() * Unsafe.SizeOf<Leaf>(), triangles.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ShaderStorageBuffer, sizeInBytes, triangles.ToArray(), BufferUsageHint.DynamicDraw);
             GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, ShaderStorageBufferHandle);
             int triangleOffset = 0;
             Vector3? sunOrigin = null;
