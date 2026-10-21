@@ -7,15 +7,16 @@ namespace OpenTK_Project.Logic.Raytracing
     {
         public Branch? LeftChild, RightChild;
         public uint? LeftChildIndex, RightChildIndex, ParentIndex, SelfIndex;
-        public TrianglePrimitive[]? Triangles;
+        public BranchPrimitive[]? Triangles;
         private Vector3 min, max;
         private int maxLeafSize = 4;
         private float traversalCost = 1;
         private float intersectionCost = 1;
 
-        public uint Populate( TrianglePrimitive[] primitives, Vector3 min, Vector3 max, uint index = 0 )
+        public uint Populate( BranchPrimitive[] primitives, Vector3 min, Vector3 max, uint index = 0 )
         {
             index++;
+            SelfIndex = index;
             float rootArea = Area(min, max);
             float minCost = float.PositiveInfinity;
             int minCostIndex = 0;
@@ -63,7 +64,7 @@ namespace OpenTK_Project.Logic.Raytracing
                     leftMin = GetMin(leftMin, primitives[i].Min.Xyz);
                     leftMax = GetMax(leftMax, primitives[i].Max.Xyz);
                 }
-                TrianglePrimitive[] leftPrimitives = new TrianglePrimitive[minCostIndex];
+                BranchPrimitive[] leftPrimitives = new BranchPrimitive[minCostIndex];
                 for (int i = 0; i <  minCostIndex; i++ )
                 {
                     leftPrimitives[i] = primitives[i];
@@ -77,7 +78,7 @@ namespace OpenTK_Project.Logic.Raytracing
                     rightMin = GetMin(rightMin, primitives[i].Min.Xyz);
                     rightMax = GetMax(rightMax, primitives[i].Max.Xyz);
                 }
-                TrianglePrimitive[] rightPrimitives = new TrianglePrimitive[primitives.Length - minCostIndex];
+                BranchPrimitive[] rightPrimitives = new BranchPrimitive[primitives.Length - minCostIndex];
                 for ( int i = minCostIndex; i < primitives.Length; i++ )
                 {
                     rightPrimitives[i - minCostIndex] = primitives[i];
@@ -87,7 +88,6 @@ namespace OpenTK_Project.Logic.Raytracing
                 LeftChildIndex = LeftChild.Populate(leftPrimitives, leftMin, leftMax, index);
                 RightChildIndex = RightChild.Populate(rightPrimitives, rightMin, rightMax, index);
                 ParentIndex = index - 1;
-                SelfIndex = index;
                 this.min = min;
                 this.max = max;
             }
@@ -100,17 +100,37 @@ namespace OpenTK_Project.Logic.Raytracing
             node.Min = new Vector4(min, 0);
             node.Max = new Vector4(max, 0);
             node.Self = (uint)SelfIndex!;
+            node.Parent = 0;
             if (ParentIndex != null )
             {
                 node.Parent = (uint)ParentIndex;
             }
             if ( Triangles != null )
             {
-                node.Triangles = Triangles.ToArray();
+                for ( int i = 0; i < Triangles.Length; i++ )
+                {
+                    ShaderPrimitive primitive = new();
+                    primitive.V0 = Triangles[i].V0;
+                    primitive.V1 = Triangles[i].V1;
+                    primitive.V2 = Triangles[i].V2;
+                    primitive.Normal = Triangles[i].Normal;
+                    primitive.Origin = Triangles[i].Origin;
+                    switch (i)
+                    {
+                        case 0: 
+                            node.triangle1 = primitive; break;
+                        case 1:
+                            node.triangle2 = primitive; break;
+                        case 2: 
+                            node.triangle3 = primitive; break;
+                        case 3: 
+                            node.triangle4 = primitive; break;
+                    }
+                }
             }
             else
             {
-                if (LeftChild != null )
+                if ( LeftChild != null )
                 {
                     node.Left = (uint)LeftChild.SelfIndex!;
                     nodes.AddRange(LeftChild.GetNodes());

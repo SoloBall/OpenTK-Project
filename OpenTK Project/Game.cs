@@ -35,7 +35,7 @@ namespace OpenTK_Project
 
         private string equippedModel = "cube";
 
-        public Game(int width = 1280, int height = 720, string title = "Base Window") : base(GameWindowSettings.Default,
+        public Game(int width = 1920, int height = 1080, string title = "Base Window") : base(GameWindowSettings.Default,
             new NativeWindowSettings()
             {
                 Title = title,
@@ -353,7 +353,6 @@ namespace OpenTK_Project
             GL.Viewport(0, 0, ClientSize.X, ClientSize.Y);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
             // switch to buffersubdata when too slow
-            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, ShaderStorageBufferHandle);
 
             isPrimitivesDirty = true; // change to only when something changes
             if ( isPrimitivesDirty )
@@ -365,9 +364,27 @@ namespace OpenTK_Project
             nint sizeInBytes = 0;
             foreach (ShaderNode node in triangles )
             {
-                sizeInBytes += Unsafe.SizeOf<TrianglePrimitive>() * node.Triangles.Length + 16 + 16 + 16; // 4 * sizeof(int32) = 16 + two vec4
+                int length = 0;
+                if (node.triangle1.V0.W != 1 )
+                {
+                    length++;
+                }
+                if ( node.triangle2.V0.W != 1 )
+                {
+                    length++;
+                }
+                if ( node.triangle3.V0.W != 1 )
+                {
+                    length++;
+                }
+                if ( node.triangle4.V0.W != 1 )
+                {
+                    length++;
+                }
+
+                sizeInBytes += Unsafe.SizeOf<ShaderPrimitive>() * length + 16 + 16 + 16; // 4 * sizeof(int32) = 16 + two vec4
             }
-            
+            GL.BindBuffer(BufferTarget.ShaderStorageBuffer, ShaderStorageBufferHandle);
             GL.BufferData(BufferTarget.ShaderStorageBuffer, sizeInBytes, triangles.ToArray(), BufferUsageHint.DynamicDraw);
             GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, ShaderStorageBufferHandle);
             int triangleOffset = 0;
@@ -389,7 +406,7 @@ namespace OpenTK_Project
         private void UpdatePrimitives( )
         {
             primitives = new Branch();
-            List<TrianglePrimitive> triangles = new List<TrianglePrimitive>();
+            List<BranchPrimitive> triangles = new List<BranchPrimitive>();
             Vector3 rootMin = Vector3.PositiveInfinity;
             Vector3 rootMax = Vector3.NegativeInfinity;
             foreach ( SceneObject obj in objects )
@@ -406,7 +423,7 @@ namespace OpenTK_Project
                     rootMin = new Vector3(Math.Min(rootMin.X, Min.X), Math.Min(rootMin.Y, Min.Y), Math.Min(rootMin.Z, Min.Z));
                     rootMax = new Vector3(Math.Max(rootMax.X, Max.X), Math.Max(rootMax.Y, Max.Y), Math.Max(rootMax.Z, Max.Z));
 
-                    triangles.Add(new TrianglePrimitive
+                    triangles.Add(new BranchPrimitive
                     {
                         V0 = new Vector4(a, 0),
                         V1 = new Vector4(b, 0),
@@ -416,8 +433,6 @@ namespace OpenTK_Project
                         Min = new Vector4(Min, 0),
                         Max = new Vector4(Max, 0),
                         Centroid = new Vector4((a + b + c) / 3),
-                        Color = obj.Color,
-                        Orientation = obj.Mesh.Orientation
                     });
                 }
             }
