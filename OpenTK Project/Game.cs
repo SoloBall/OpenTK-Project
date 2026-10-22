@@ -75,7 +75,7 @@ namespace OpenTK_Project
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
-            UpdateSun();
+            //UpdateSun();
             base.OnUpdateFrame(args);
 
             deltaTime = (float)args.Time;
@@ -169,7 +169,7 @@ namespace OpenTK_Project
                     case "sun":
                         if (sunIndex == -1)
                         {
-                            SceneObject sun = new(new Vector3(50, 50, 50), Vector3.Zero + Vector3.UnitZ * 900, Color4.Yellow, modelURL: "Entity/sun");
+                            SceneObject sun = new(new Vector3(1, 1, 1), camera.Position + Vector3.UnitZ * 5, Color4.Yellow, modelURL: "Entity/sun");
                             sun.Mesh.Tag = "sun";
                             objects!.Add(sun);
                             sunIndex = objects.Count() - 1;
@@ -359,10 +359,10 @@ namespace OpenTK_Project
             {
                 UpdatePrimitives();
             }
-            List<ShaderNode> triangles = primitives.GetNodes();
-            triangles.OrderBy(x => x.Self);
+            List<ShaderNode> boxes = primitives.GetNodes();
+            boxes = boxes.OrderBy(x => x.Self).ToList();
             nint sizeInBytes = 0;
-            foreach (ShaderNode node in triangles )
+            foreach (ShaderNode node in boxes )
             {
                 int length = 0;
                 if (node.triangle1.V0.W != 1 )
@@ -385,7 +385,7 @@ namespace OpenTK_Project
                 sizeInBytes += Unsafe.SizeOf<ShaderPrimitive>() * length + 16 + 16 + 16; // 4 * sizeof(int32) = 16 + two vec4
             }
             GL.BindBuffer(BufferTarget.ShaderStorageBuffer, ShaderStorageBufferHandle);
-            GL.BufferData(BufferTarget.ShaderStorageBuffer, sizeInBytes, triangles.ToArray(), BufferUsageHint.DynamicDraw);
+            GL.BufferData(BufferTarget.ShaderStorageBuffer, sizeInBytes, boxes.ToArray(), BufferUsageHint.DynamicDraw);
             GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, ShaderStorageBufferHandle);
             int triangleOffset = 0;
             Vector3? sunOrigin = null;
@@ -411,11 +411,15 @@ namespace OpenTK_Project
             Vector3 rootMax = Vector3.NegativeInfinity;
             foreach ( SceneObject obj in objects )
             {
+                if (obj.Mesh.Tag == "sun" )
+                {
+                    continue;
+                }
                 for ( int i = 0; i < obj.Mesh.Indices.Length; i += 3 )
                 {
-                    Vector3 a = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position);
-                    Vector3 b = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position);
-                    Vector3 c = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position);
+                    Vector3 a = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i]].Position) + obj.Mesh.LocalOrigin;
+                    Vector3 b = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 1]].Position) + obj.Mesh.LocalOrigin;
+                    Vector3 c = RotateVector(obj.Mesh.Orientation, obj.Mesh.Vertices[obj.Mesh.Indices[i + 2]].Position) + obj.Mesh.LocalOrigin;
 
                     Vector3 Min = new Vector3(Math.Min(c.X, Math.Min(a.X, b.X)), Math.Min(c.Y, Math.Min(a.Y, b.Y)), Math.Min(c.Z, Math.Min(a.Z, b.Z)));
                     Vector3 Max = new Vector3(Math.Max(c.X, Math.Max(a.X, b.X)), Math.Max(c.Y, Math.Max(a.Y, b.Y)), Math.Max(c.Z, Math.Max(a.Z, b.Z)));
