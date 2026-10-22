@@ -228,7 +228,6 @@ namespace OpenTK_Project
             else
             {
                 GL.Uniform4(sunOriginLocation, new Vector4((Vector3)sunOrigin, 1));
-                Console.WriteLine("nigga");
             }
 
             GL.BindVertexArray(VertexArrayObject);

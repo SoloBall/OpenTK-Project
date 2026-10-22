@@ -8,6 +8,7 @@ struct Node
 {
     //Triangle Triangles[];
     int Left, Right, Parent, Self;
+    //both 0,0,0,0
     vec4 Min, Max;
     Triangle triangle1, triangle2, triangle3, triangle4;
 };
@@ -43,12 +44,12 @@ void main(){
     }
     vec4 darkFragColor = fColor * (1 - darkFactor);
     vec3 directionToSun = vec3(0, 0, 0);
+    color = darkFragColor;
     if (sunOrigin.w != 0) 
     {
         directionToSun = sunOrigin.xyz - fPos;
         if (length(directionToSun) < 0.9) // a little more than the max distance inside the cube sun 
         {
-        color = vec4(clamp(sunOrigin.w * 3.4e38, 0, 1), 0, val, 1);
             return;
         }
         directionToSun = normalize(directionToSun);
@@ -60,20 +61,27 @@ void main(){
     // if current primitive points in the same direction as either the sun or camera, as in dot() > 0, skip. If point is same direction as sun, go to other shadow part.
         float shortestRayLength = 3.4e38;
         int index = 0;
+        vec3 inverseDirection = 1/directionToSun;
+        vec3 OriginInverseDirection = -fPos * inverseDirection;
+
         while (true)
         {
-            // ray origin = fpos, ray direction = directionToSun find scale
-            vec3 t0 = (nodes[index].Min.xyz - fPos) / directionToSun;
-            vec3 t1 = (nodes[index].Max.xyz - fPos) / directionToSun;
+            // vectors that describes the rays that may or may not intersect with AABB
+            vec3 rayEntry = (nodes[index].Min.xyz - fPos) / directionToSun;
+            vec3 rayExit = (nodes[index].Max.xyz - fPos) / directionToSun;
 
-            vec3 tMin = min(t0, t1);
-            vec3 tMax = max(t0, t1);
+            // vectors that turn the rays into the smallest/biggest points where the ray intersects
+            vec3 entry = min(rayEntry, rayExit); // component-wise
+            vec3 exit = max(rayEntry, rayExit);
 
-            float tEnter = max(max(tMin.x, tMin.y), tMin.z);
-            float tExit  = min(min(tMax.x, tMax.y), tMax.z);
+            // vector that takes the biggest of the small values to get the latest possible entry
+            float tEntry = max(max(entry.x, entry.y), entry.z);
+            // vector that takes the smallest of the big values to get the earliest possible exit
+            float tExit  = min(min(exit.x, exit.y), exit.z);
             bool doContinue = false;
             bool doBreak = false;
-            if (!(tEnter <= tExit && tExit >= 0.0)) // no hit
+            // This way, we compare the smallest exit with the biggest entry, which, for a true intersection, will always lead to a smaller entry + if the hit is behind
+            if (tEntry > tExit || tEntry <= 0) // no hit
             {
                 if (index == 0)
                 {
@@ -128,6 +136,7 @@ void main(){
                 // whats the shortest intersecting triangle?
                 for (int i = 0; i < trianglesCount; i++)
                 {
+                    color = darkFragColor * 0.0f;
                     Triangle triangle;
                     switch (i) 
                     {
@@ -221,10 +230,6 @@ void main(){
          }
     if (shortestRayLength < 3.4e38) 
     {
-        //color = darkFragColor * clamp(0.4, 0.4f, 1.0f); // set to function of raylength
-    }
-    else 
-    {
-        //color = darkFragColor;
+        color = darkFragColor * clamp(0.4, 0.4f, 1.0f); // set to function of raylength
     }
 }
